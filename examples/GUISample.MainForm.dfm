@@ -35,7 +35,7 @@ object GUISampleForm: TGUISampleForm
     Width = 361
     Height = 21
     TabOrder = 0
-    Text = 'FFF10F-8EAA50-4852AC-F7C0D1-B0C0C5-68EAFD'
+    Text = ''
   end
   object statStatusBar: TStatusBar
     Left = 0
