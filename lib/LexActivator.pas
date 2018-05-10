@@ -19,6 +19,7 @@ interface
 
 {$IF CompilerVersion >= 20.0}
   {$DEFINE DELPHI_IS_UNICODE}
+  {$DEFINE DELPHI_HAS_CLOSURES}
 {$IFEND}
 
 {$IF CompilerVersion >= 21.0}
@@ -41,30 +42,26 @@ uses
 
 type
   TLAFlags = (lfUser, lfSystem);
-  TLATrialType = (ltVTrial, ltUVTrial);
-  TLAKeyStatus = (lkOK, lkExpired, lkRevoked, lkGPOver, lkTExpired,
-    lkTExtExpired,
-    lkFail // Special value, should only be returned from ELAError.CheckKeyStatus
+  TLAKeyStatus = (lkOK, lkExpired, lkSuspended, lkGracePeriodOver,
+    lkTrialExpired, lkLocalTrialExpired, lkFail,
+    lkException // for callback
     );
 
 function LAFlagsToString(Item: TLAFlags): string;
-function LATrialTypeToString(Item: TLATrialType): string;
 function LAKeyStatusToString(Item: TLAKeyStatus): string;    
 
 (*
     PROCEDURE: SetProductFile()
 
-    PURPOSE: Sets the path of the Product.dat file. This should be
-    used if your application and Product.dat file are in different
-    folders or you have renamed the Product.dat file.
+    PURPOSE: Sets the absolute path of the Product.dat file.
 
-    If this procedure is used, it must be called on every start of
-    your program before any other functions are called.
+    This function must be called on every start of your program
+    before any other functions are called.
 
     PARAMETERS:
-    * FilePath - path of the product file (Product.dat)
+    * FilePath - absolute path of the product file (Product.dat)
 
-    EXCEPTIONS: ELAFPathException, ELAPFileException
+    EXCEPTIONS: ELAFilePathException, ELAProductFileException
 
     NOTE: If this function fails to set the path of product file, none of the
     other functions will work.
@@ -73,115 +70,380 @@ function LAKeyStatusToString(Item: TLAKeyStatus): string;
 procedure SetProductFile(const FilePath: UnicodeString);
 
 (*
-    PROCEDURE: SetVersionGUID()
+    PROCEDURE: SetProductData()
 
-    PURPOSE: Sets the version GUID of your application.
+    PURPOSE: Embeds the Product.dat file in the application.
+
+    It can be used instead of SetProductFile() in case you want
+    to embed the Product.dat file in your application.
+
+    This function must be called on every start of your program
+    before any other functions are called.
+
+    PARAMETERS:
+    * ProductData - content of the Product.dat file
+
+    EXCEPTIONS: ELAProductDataException
+
+    NOTE: If this function fails to set the product data, none of the
+    other functions will work.
+*)
+
+procedure SetProductData(const ProductData: UnicodeString);
+
+(*
+    PROCEDURE: SetProductId()
+
+    PURPOSE: Sets the product id of your application.
 
     This function must be called on every start of your program before
     any other functions are called, with the exception of SetProductFile()
-    function.
+    or SetProductData() function.
 
     PARAMETERS:
-    * VersionGUID - the unique version GUID of your application as mentioned
-      on the product version page of your application in the dashboard.
+    * ProductId - the unique product id of your application as mentioned
+      on the product page in the dashboard.
 
     * Flags - depending upon whether your application requires admin/root
       permissions to run or not, this parameter can have one of the following
       values: lfSystem, lfUser
 
-    EXCEPTIONS: ELAWMICException, ELAPFileException, ELAGUIDException,
-    ELAPermissionException
+    EXCEPTIONS: ELAWMICException, ELAProductFileException,
+    ELAProductDataException, ELAProductIdException,
+    ELASystemPermissionException
 
-    NOTE: If this function fails to set the version GUID, none of the other
+    NOTE: If this function fails to set the product id, none of the other
     functions will work.
 *)
 
-procedure SetVersionGUID(const VersionGUID: UnicodeString; Flags: TLAFlags);
+procedure SetProductId(const ProductId: UnicodeString; Flags: TLAFlags);
 
 (*
-    PROCEDURE: SetProductKey()
+    PROCEDURE: SetLicenseKey()
 
-    PURPOSE: Sets the product key required to activate the application.
+    PURPOSE: Sets the license key required to activate the license.
 
     PARAMETERS:
-    * ProductKey - a valid product key generated for the application.
+    * LicenseKey - a valid license key.
 
-    EXCEPTIONS: ELAGUIDException, ELAPKeyException
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
 *)
 
-procedure SetProductKey(const ProductKey: UnicodeString);
+procedure SetLicenseKey(const LicenseKey: UnicodeString);
 
 (*
-    PROCEDURE: SetExtraActivationData()
+    PROCEDURE: SetLicenseCallback()
 
-    PURPOSE: Sets the extra data which you may want to fetch from the user
-    at the time of activation.
+    PURPOSE: Sets server sync callback function.
 
-    The extra data appears along with activation details of the product key
+    Whenever the server sync occurs in a separate thread, and server returns the response,
+    license callback function gets invoked with the following status codes:
+    LA_OK, LA_EXPIRED, LA_SUSPENDED,
+    LA_E_REVOKED, LA_E_ACTIVATION_NOT_FOUND, LA_E_MACHINE_FINGERPRINT
+    LA_E_COUNTRY, LA_E_INET, LA_E_SERVER, LA_E_RATE_LIMIT, LA_E_IP
+
+    PARAMETERS:
+    * Callback - name of the callback procedure, method or closure
+    * Synchronized - whether callback must be invoked in main (GUI) thread
+    using TThread.Synchronize
+    Usually True for GUI applications and handlers like TForm1.OnLexActivator
+    Must be False if there is no GUI message loop, like in console applications,
+    but then another thread synchronization measures must be used.
+
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
+*)
+
+type
+  TLAProcedureCallback = procedure(const Error: Exception; Status: TLAKeyStatus);
+  TLAMethodCallback = procedure(const Error: Exception; Status: TLAKeyStatus) of object;
+  {$IFDEF DELPHI_HAS_CLOSURES}
+  TLAClosureCallback = reference to procedure(const Error: Exception; Status: TLAKeyStatus);
+  {$ENDIF}
+
+procedure SetLicenseCallback(Callback: TLAProcedureCallback; Synchronized: Boolean); overload;
+procedure SetLicenseCallback(Callback: TLAMethodCallback; Synchronized: Boolean); overload;
+{$IFDEF DELPHI_HAS_CLOSURES}
+procedure SetLicenseCallback(Callback: TLAClosureCallback; Synchronized: Boolean); overload;
+{$ENDIF}
+
+(*
+    PROCEDURE: SetLicenseCallback()
+
+    PURPOSE: Resets server sync callback function.
+
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
+*)
+
+procedure ResetLicenseCallback;
+
+(*
+    PROCEDURE: SetActivationMetadata()
+
+    PURPOSE: Sets the activation metadata.
+
+    The  metadata appears along with the activation details of the license
     in dashboard.
 
     PARAMETERS:
-    * ExtraData - string of maximum length 256 characters with utf-8 encoding.
+    * Key - string of maximum length 256 characters with utf-8 encoding.
+    * Value - string of maximum length 256 characters with utf-8 encoding.
 
-    EXCEPTIONS: ELAGUIDException, ELAEDataLenException
-
-    NOTE: If the length of the string is more than 256, it is truncated to the
-    allowed size.
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
+    ELAMetadataKeyLengthException, ELAMetadataValueLengthException,
+    ELAActivationMetadataLimitException
 *)
 
-procedure SetExtraActivationData(const ExtraData: UnicodeString);
+procedure SetActivationMetadata(const Key, Value: UnicodeString);
 
 (*
-    FUNCTION: ActivateProduct()
+    PROCEDURE: SetTrialActivationMetadata()
 
-    PURPOSE: Activates your application by contacting the Cryptlex servers. It
-    validates the key and returns with encrypted and digitally signed response
+    PURPOSE: Sets the trial activation metadata.
+
+    The  metadata appears along with the trial activation details of the product
+    in dashboard.
+
+    PARAMETERS:
+    * Key - string of maximum length 256 characters with utf-8 encoding.
+    * Value - string of maximum length 256 characters with utf-8 encoding.
+
+    EXCEPTIONS: ELAProductIdException, ELAMetadataKeyLengthException,
+    ELAMetadataValueLengthException, ELATrialActivationMetadataLimitException
+*)
+
+procedure SetTrialActivationMetadata(const Key, Value: UnicodeString);
+
+(*
+    PROCEDURE: SetAppVersion()
+
+    PURPOSE: Sets the current app version of your application.
+
+    The app version appears along with the activation details in dashboard. It
+    is also used to generate app analytics.
+
+    PARAMETERS:
+    * AppVersion - string of maximum length 256 characters with utf-8 encoding.
+
+    EXCEPTIONS: ELAProductIdException, ELAAppVersionLengthException
+*)
+
+procedure SetAppVersion(const AppVersion: UnicodeString);
+
+(*
+    PROCEDURE: SetNetworkProxy()
+
+    PURPOSE: Sets the network proxy to be used when contacting Cryptlex servers.
+
+    The proxy format should be: [protocol://][username:password@]machine[:port]
+
+    Following are some examples of the valid proxy strings:
+        - http://127.0.0.1:8000/
+        - http://user:pass@127.0.0.1:8000/
+        - socks5://127.0.0.1:8000/
+
+    PARAMETERS:
+    * Proxy - proxy string having correct proxy format
+
+    EXCEPTIONS: ELAProductIdException, ELANetProxyException
+
+    NOTE: Proxy settings of the computer are automatically detected. So, in most of the
+    cases you don't need to care whether your user is behind a proxy server or not.
+*)
+
+procedure SetNetworkProxy(const Proxy: UnicodeString);
+
+(*
+    FUNCTION: GetProductMetadata()
+
+    PURPOSE: Gets the product metadata as set in the dashboard.
+
+    This is available for trial as well as license activations.
+
+    PARAMETERS:
+    * Key - key to retrieve the value
+
+    RESULT: Product metadata as set in the dashboard
+
+    EXCEPTIONS: ELAProductIdException, ELAMetadataKeyNotFoundException,
+    ELABufferSizeException
+*)
+
+function GetProductMetadata(const Key: UnicodeString): UnicodeString;
+
+(*
+    FUNCTION: GetLicenseMetadata()
+
+    PURPOSE: Gets the license metadata as set in the dashboard.
+
+    PARAMETERS:
+    * Key - key to retrieve the value
+
+    RESULT: License metadata as set in the dashboard
+
+    EXCEPTIONS: ELAProductIdException, ELAMetadataKeyNotFoundException,
+    ELABufferSizeException
+*)
+
+function GetLicenseMetadata(const Key: UnicodeString): UnicodeString;
+
+(*
+    FUNCTION: GetLicenseKey()
+
+    PURPOSE: Gets the license key used for activation.
+
+    RESULT: License key used for activation
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELABufferSizeException
+*)
+
+function GetLicenseKey: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseExpiryDate()
+
+    PURPOSE: Gets the license expiry date timestamp.
+
+    RESULT: License expiry date timestamp
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELATimeException
+*)
+
+function GetLicenseExpiryDate: TDateTime;
+
+(*
+    FUNCTION: GetLicenseUserEmail()
+
+    PURPOSE: Gets the email associated with license user.
+
+    RESULT: Email associated with license user
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELABufferSizeException
+*)
+
+function GetLicenseUserEmail: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseUserName()
+
+    PURPOSE: Gets the name associated with license user.
+
+    RESULT: Name associated with license user
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELABufferSizeException
+*)
+
+function GetLicenseUserName: UnicodeString;
+
+(*
+    FUNCTION: GetActivationMetadata()
+
+    PURPOSE: Gets the activation metadata.
+
+    PARAMETERS:
+    * Key - key to retrieve the value
+
+    RESULT: activation metadata
+
+    EXCEPTIONS: ELAProductIdException, ELAMetadataKeyNotFoundException,
+    ELABufferSizeException
+*)
+
+function GetActivationMetadata(const Key: UnicodeString): UnicodeString;
+
+(*
+    FUNCTION: GetTrialActivationMetadata()
+
+    PURPOSE: Gets the trial activation metadata.
+
+    PARAMETERS:
+    * Key - key to retrieve the value
+
+    RESULT: Trial activation metadata
+
+    EXCEPTIONS: ELAProductIdException, ELAMetadataKeyNotFoundException,
+    ELABufferSizeException
+*)
+
+function GetTrialActivationMetadata(const Key: UnicodeString): UnicodeString;
+
+(*
+    FUNCTION: GetTrialExpiryDate()
+
+    PURPOSE: Gets the trial expiry date timestamp.
+
+    RESULT: Trial expiry date timestamp
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+*)
+
+function GetTrialExpiryDate: TDateTime;
+
+(*
+    FUNCTION: GetTrialId()
+
+    PURPOSE: Gets the trial activation id. Used in case of trial extension.
+
+    RESULT: Trial activation id
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELABufferSizeException
+*)
+
+function GetTrialId: UnicodeString;
+
+(*
+    FUNCTION: GetLocalTrialExpiryDate()
+
+    PURPOSE: Gets the trial expiry date timestamp.
+
+    RESULT: Trial expiry date timestamp
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+*)
+
+function GetLocalTrialExpiryDate: TDateTime;
+
+(*
+    FUNCTION: ActivateLicense()
+
+    PURPOSE: Activates the license by contacting the Cryptlex servers. It
+    validates the key and returns with encrypted and digitally signed token
     which it stores and uses to activate your application.
 
     This function should be executed at the time of registration, ideally on
     a button click.
 
-    RETURN CODES: lkOK, lkExpired, lkRevoked
+    RETURN CODES: lkOK, LkExpired, lkSuspended, lkRevoked
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELAPKeyException,
-    ELAInetException, ELAVMException, ELATimeException, ELAActLimitException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELAInetException,
+    ELAVMException, ELATimeException, ELAActivationLimitException,
+    ELAServerException, ELAClientException, ELALicenseTypeException,
+    ELACountryException, ELAIPException, ELARateLimitException,
+    ELALicenseKeyException
 *)
 
-function ActivateProduct: TLAKeyStatus;
+function ActivateLicense: TLAKeyStatus;
 
 (*
-    FUNCTION: DeactivateProduct()
+    FUNCTION: ActivateLicenseOffline()
 
-    PURPOSE: Deactivates the application and frees up the correponding activation
-    slot by contacting the Cryptlex servers.
-
-    This function should be executed at the time of deregistration, ideally on
-    a button click.
-
-    RETURN CODES: lkOK, lkExpired, lkRevoked
-
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELAPKeyException,
-    ELAInetException, ELADeactLimitException
-*)
-
-function DeactivateProduct: TLAKeyStatus;
-
-(*
-    FUNCTION: ActivateProductOffline()
-
-    PURPOSE: Activates your application using the offline activation response
-    file.
+    PURPOSE: Activates your licenses using the offline activation response file.
 
     PARAMETERS:
-    * FilePath - path of the offline activation response file
+    * FilePath - path of the offline activation response file.
 
     RETURN CODES: lkOK, lkExpired
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELAPKeyException,
-    ELAOFileException, ELAVMException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    ELAOfflineResponseFileException, ELAVMException, ELATimeException,
+    ELAFilePathException, ELAOfflineResponseFileExpiredException
 *)
 
-function ActivateProductOffline(const FilePath: UnicodeString): TLAKeyStatus;
+function ActivateLicenseOffline(const FilePath: UnicodeString): TLAKeyStatus;
 
 (*
     PROCEDURE: GenerateOfflineActivationRequest()
@@ -190,139 +452,96 @@ function ActivateProductOffline(const FilePath: UnicodeString): TLAKeyStatus;
     offline activation response in the dashboard.
 
     PARAMETERS:
-    * FilePath - path of the file, needed to be created, for the offline request.
+    * FilePath - path of the file for the offline request.
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELAPKeyException
+    EXCEPTION: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    ELAFilePermissionException
 *)
 
 procedure GenerateOfflineActivationRequest(const FilePath: UnicodeString);
 
 (*
+    FUNCTION: DeactivateLicense()
+
+    PURPOSE: Deactivates the license activation and frees up the corresponding activation
+    slot by contacting the Cryptlex servers.
+
+    This function should be executed at the time of de-registration, ideally on
+    a button click.
+
+    RETURN CODES: lkOk, lkFail
+
+    EXCEPTIONS: ELADeactivationLimitException, ELAProductIdException,
+    ELATimeException, ELALicenseKeyException, ELAInetException,
+    ELAServerException, ELARateLimitException
+*)
+
+function DeactivateLicense: TLAKeyStatus;
+
+(*
     PROCEDURE: GenerateOfflineDeactivationRequest()
 
     PURPOSE: Generates the offline deactivation request needed for deactivation of
-    the product key in the dashboard and deactivates the application.
+    the license in the dashboard and deactivates the license locally.
 
-    A valid offline deactivation file confirms that the application has been successfully
+    A valid offline deactivation file confirms that the license has been successfully
     deactivated on the user's machine.
 
     PARAMETERS:
-    * FilePath - path of the file, needed to be created, for the offline request.
+    * FilePath - path of the file for the offline request.
 
-    EXCEPTIONS: ELAExpiredError, ELARevokedError, ELAFailException, ELAGUIDException,
-    ELAPKeyException
-    
+    EXCEPTION: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    ELAFilePermissionException, ELATimeException
 *)
 
 procedure GenerateOfflineDeactivationRequest(const FilePath: UnicodeString);
 
 (*
-    FUNCTION: IsProductGenuine()
+    FUNCTION: IsLicenseGenuine()
 
     PURPOSE: It verifies whether your app is genuinely activated or not. The verification is
     done locally by verifying the cryptographic digital signature fetched at the time of
     activation.
 
-    After verifying locally, it schedules a server check in a separate thread on due dates.
-    The default interval for server check is 100 days and this can be changed if required.
+    After verifying locally, it schedules a server check in a separate thread. After the
+    first server sync it periodically does further syncs at a frequency set for the license.
 
-    In case server validation fails due to network error, it retries every 15 minutes. If it
-    continues to fail for fixed number of days (grace period), the function returns LA_GP_OVER
-    instead of LA_OK. The default length of grace period is 30 days and this can be changed if
-    required.
+    In case server sync fails due to network error, and it continues to fail for fixed
+    number of days (grace period), the function returns lkGracePeriodOver instead of lkOK.
 
     This function must be called on every start of your program to verify the activation
     of your app.
 
-    RETURN CODES: lkOK, lkExpired, lkRevoked, lkGPOver
+    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELAPKeyException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    ELATimeException
 
-    NOTE: If application was activated offline using ActivateProductOffline() function, you
+    NOTE: If application was activated offline using ActivateLicenseOffline() function, you
     may want to set grace period to 0 to ignore grace period.
 *)
 
-function IsProductGenuine: TLAKeyStatus;
+function IsLicenseGenuine: TLAKeyStatus;
 
 (*
-    FUNCTION: IsProductActivated()
+    FUNCTION: IsLicenseValid()
 
     PURPOSE: It verifies whether your app is genuinely activated or not. The verification is
     done locally by verifying the cryptographic digital signature fetched at the time of
     activation.
 
-    This is just an auxiliary function which you may use in some specific cases.
+    This is just an auxiliary function which you may use in some specific cases, when you
+    want to skip the server sync.
 
-    RETURN CODES: lkOK, lkExpired, lkRevoked, lkGPOver
+    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELAPKeyException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    ELATimeException
+
+    NOTE: You may want to set grace period to 0 to ignore grace period.
 *)
 
-function IsProductActivated: TLAKeyStatus;
-
-(*
-	FUNCTION: GetExtraActivationData()
-
-	PURPOSE: Gets the value of the extra activation data.
-
-	RESULT: The value of the extra activation data
-
-	EXCEPTIONS: ELAGUIDException, ELABufferSizeException
-*)
-
-function GetExtraActivationData: UnicodeString;
-
-(*
-    FUNCTION: GetCustomLicenseField()
-
-    PURPOSE: Get the value of the custom field associated with the product key.
-
-    PARAMETERS:
-    * FieldId - id of the custom field whose value you want to get
-
-    RESULT: The value of the custom field associated with the product key
-
-    EXCEPTIONS: ELACustomFieldIdException, ELAGUIDException, ELABufferSizeException
-*)
-
-function GetCustomLicenseField(const FieldId: UnicodeString): UnicodeString;
-
-(*
-    FUNCTION: GetProductKey()
-
-    PURPOSE: Gets the stored product key which was used for activation.
-
-    RESULT: The stored product key which was used for activation
-
-    EXCEPTIONS: ELAPKeyException, ELAGUIDException, ELABufferSizeException
-*)
-
-function GetProductKey: UnicodeString;
-
-(*
-    FUNCTION: GetDaysLeftToExpiration()
-
-    PURPOSE: Gets the number of remaining days after which the license expires.
-
-    RESULT: The number of remaining days after which the license expires
-
-    EXCEPTIONS: ELAFailException, ELAGUIDException
-*)
-
-function GetDaysLeftToExpiration: LongWord;
-
-(*
-    PROCEDURE: SetTrialKey()
-
-    PURPOSE: Sets the trial key required to activate the verified trial.
-
-    PARAMETERS:
-    * TrialKey - trial key corresponding to the product version
-
-    EXCEPTIONS: ELAGUIDException, ELATKeyException
-*)
-
-procedure SetTrialKey(const TrialKey: UnicodeString);
+function IsLicenseValid: TLAKeyStatus;
 
 (*
     FUNCTION: ActivateTrial()
@@ -333,10 +552,11 @@ procedure SetTrialKey(const TrialKey: UnicodeString);
     This function should be executed when your application starts first time on
     the user's computer, ideally on a button click.
 
-    RETURN CODES: lkOK, lkTExpired
+    RETURN CODES: lkOK, lkTrialExpired
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELATKeyException,
-    ELAInetException, ELAVMException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELAInetException,
+    ELAVMException, ELATimeException, ELAServerException, ELAClientException,
+    ELACountryException, ELAIPException, ELARateLimitException
 *)
 
 function ActivateTrial: TLAKeyStatus;
@@ -350,192 +570,106 @@ function ActivateTrial: TLAKeyStatus;
 
     This function must be called on every start of your program during the trial period.
 
-    RETURN CODES: lkOK, lkTExpired
+    RETURN CODES: lkOK, lkTrialExpired
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELATKeyException
+    EXCEPTIONS: ELAFailException, ELATimeException, ELAProductIdException
 
-    NOTE: The function is only meant for verified trials.
 *)
 
 function IsTrialGenuine: TLAKeyStatus;
 
 (*
-    FUNCTION: ExtendTrial()
+    FUNCTION: ActivateLocalTrial()
 
-    PURPOSE: Extends the trial using the trial extension key generated in the dashboard
-    for the product version.
+    PURPOSE: Starts the local(unverified) trial.
+
+    This function should be executed when your application starts first time on
+    the user's computer.
 
     PARAMETERS:
-    * TrialExtensionKey - trial extension key generated for the product version
+    * TrialLength - trial length in days
 
-    RETURN CODES: lkOK, lkTExtExpired
+    RETURN CODES: lkOK, lkLocalTrialExpired
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELATExtKeyException,
-    ELATKeyException, ELAInetException, ELAVMException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
 
-    NOTE: The function is only meant for verified trials.
+    NOTE: The function is only meant for local(unverified) trials.
 *)
 
-function ExtendTrial(const TrialExtensionKey: UnicodeString): TLAKeyStatus;
+function ActivateLocalTrial(TrialLength: LongWord): TLAKeyStatus;
 
 (*
-    FUNCTION: InitializeTrial()
+    FUNCTION: IsLocalTrialGenuine()
 
-    PURPOSE: Starts the unverified trial if trial has not started yet and if
-    trial has already started, it verifies the validity of trial.
+    PURPOSE: It verifies whether trial has started and is genuine or not. The
+    verification is done locally.
 
     This function must be called on every start of your program during the trial period.
 
-    PARAMETERS:
-    * TrialLength - trial length as set in the dashboard for the product version
+    RETURN CODES: lkOK, lkLocalTrialExpired
 
-    RETURN CODES: lkOK, lkTExpired
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException, ELATrialLenException
-
-    NOTE: The function is only meant for unverified trials.
+    NOTE: The function is only meant for local(unverified) trials.
 *)
 
-function InitializeTrial(TrialLength: LongWord): TLAKeyStatus;
+function IsLocalTrialGenuine: TLAKeyStatus;
 
 (*
-    FUNCTION: GetTrialDaysLeft()
+    FUNCTION: ExtendLocalTrial()
 
-    PURPOSE: Gets the number of remaining trial days.
-
-    If the trial has expired or has been tampered, daysLeft is set to 0 days.
+    PURPOSE: Extends the local trial.
 
     PARAMETERS:
-    * TrialType - depending upon whether your application uses verified trial or not,
-      this parameter can have one of the following values: ltVTrial, ltUVTrial
+    * TrialExtensionLength - number of days to extend the trial
 
-    RESULT: The number of remaining trial days
+    RETURN CODES: lkOK
 
-    EXCEPTIONS: ELAFailException, ELAGUIDException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
 
-    NOTE: The trial must be started by calling ActivateTrial() or  InitializeTrial() at least
-    once in the past before calling this function.
+    NOTE: The function is only meant for local(unverified) trials.
 *)
 
-function GetTrialDaysLeft(TrialType: TLATrialType): LongWord;
+function ExtendLocalTrial(TrialExtensionLength: LongWord): TLAKeyStatus;
 
 (*
-    PROCEDURE: SetDayIntervalForServerCheck()
+    PROCEDURE: LAReset()
 
-    PURPOSE: Sets the interval for server checks done by IsProductGenuine() function.
+    PURPOSE: Resets the activation and trial data stored in the machine.
 
-    To disable sever check pass 0 as the day interval.
+    This function is meant for developer testing only.
 
-    PARAMETERS:
-    * DayInterval - length of the interval in days
+    EXCEPTIONS: ELAProductIdException
 
-    EXCEPTIONS: ELAGUIDException
+    NOTE: The function does not reset local(unverified) trial data.
 *)
 
-procedure SetDayIntervalForServerCheck(DayInterval: LongWord);
-
-(*
-    PROCEDURE: SetGracePeriodForNetworkError()
-
-    PURPOSE: Sets the grace period for failed re-validation requests sent
-    by IsProductGenuine() function, caused due to network errors.
-
-    It determines how long in days, should IsProductGenuine() function retry
-    contacting CryptLex Servers, before returning LA_GP_OVER instead of LA_OK.
-
-    To ignore grace period pass 0 as the grace period. This may be useful in
-    case of offline activations.
-
-    PARAMETERS:
-    * GracePeriod - length of the grace period in days
-
-    EXCEPTIONS: ELAGUIDException
-*)
-
-procedure SetGracePeriodForNetworkError(GracePeriod: LongWord);
-
-(*
-    FUNCTION: SetNetworkProxy()
-
-    PURPOSE: Sets the network proxy to be used when contacting CryptLex servers.
-
-    The proxy format should be: [protocol://][username:password@]machine[:port]
-
-    Following are some examples of the valid proxy strings:
-        - http://127.0.0.1:8000/
-        - http://user:pass@127.0.0.1:8000/
-        - socks5://127.0.0.1:8000/
-
-    PARAMETERS:
-    * Proxy - proxy string having correct proxy format
-
-    EXCEPTIONS: ELAGUIDException, ELANetworkProxyException
-
-    NOTE: Proxy settings of the computer are automatically detected. So, in most of the
-    cases you don't need to care whether your user is behind a proxy server or not.
-*)
-
-procedure SetNetworkProxy(const Proxy: UnicodeString);
-
-(*
-    PROCEDURE: SetUserLock()
-
-    PURPOSE: Enables the user locked licensing.
-
-    It adds an additional user lock to the product key. Activations by different users in
-    the same OS are treated as separate activations.
-
-    PARAMETERS:
-    * UserLock - boolean value to enable or disable the lock
-
-    EXCEPTIONS: ELAGUIDException
-
-    NOTE: User lock is disabled by default. You should enable it in case your application
-    is used through remote desktop services where multiple users access individual sessions
-    on a single machine instance at the same time.
-*)
-
-procedure SetUserLock(UserLock: Boolean);
-
-(*
-    PROCEDURE: SetCryptlexHost()
-
-    PURPOSE: In case you are running Cryptlex on a private web server, you can set the
-    host for your private server.
-
-    PARAMETERS:
-    * Host - the address of the private web server running Cryptlex
-
-    EXCEPTIONS: ELAGUIDException, ELACryptlexHostException
-
-    NOTE: This function should never be used unless you have opted for a private Cryptlex
-    Server.
-*)
-
-procedure SetCryptlexHost(const Host: UnicodeString);
+procedure LAReset;
 
 (*** Exceptions ***)
 
 type
+  TLAStatusCode = type Integer;
+  
   {$M+}
   ELAError = class(Exception) // parent of all LexActivator exceptions
   protected
-    FErrorCode: HRESULT;
+    FErrorCode: TLAStatusCode;
   public
     // create exception of an appropriate class
-    class function CreateByCode(ErrorCode: HRESULT): ELAError;
+    class function CreateByCode(ErrorCode: TLAStatusCode): ELAError;
 
     // check for LA_OK, otherwise raise exception
-    class procedure Check(ErrorCode: HRESULT); {$IFDEF DELPHI_HAS_INLINE} inline; {$ENDIF}
+    class procedure Check(ErrorCode: TLAStatusCode); {$IFDEF DELPHI_HAS_INLINE} inline; {$ENDIF}
 
     // convert LA_OK into True, LA_FAIL into False, otherwise raise exception
-    class function CheckOKFail(ErrorCode: HRESULT): Boolean; {$IFDEF DELPHI_HAS_INLINE} inline; {$ENDIF}
+    class function CheckOKFail(ErrorCode: TLAStatusCode): Boolean; {$IFDEF DELPHI_HAS_INLINE} inline; {$ENDIF}
 
     // convert ErrorCode to TLAKeyStatus, otherwise raise exception
     // LA_FAIL will be converted to lkFail
-    class function CheckKeyStatus(ErrorCode: HRESULT): TLAKeyStatus;
+    class function CheckKeyStatus(ErrorCode: TLAStatusCode): TLAKeyStatus;
 
-    property ErrorCode: HRESULT read FErrorCode;
+    property ErrorCode: TLAStatusCode read FErrorCode;
   end;
   {$M-}
 
@@ -545,15 +679,7 @@ type
   // Function returned a code not understandable by Delphi binding yet
   ELAUnknownErrorCodeException = class(ELAException)
   protected
-    constructor Create(AErrorCode: HRESULT);
-  end;
-
-  // LA_FAIL
-  ELAFailException = class(ELAException)
-  public
-    constructor Create; overload;
-    constructor Create(const Msg: string); overload;
-    procedure AfterConstruction; override;
+    constructor Create(AErrorCode: TLAStatusCode);
   end;
 
   ELAKeyStatusError = class(ELAError)
@@ -565,298 +691,475 @@ type
     property KeyStatus: TLAKeyStatus read FKeyStatus;
   end;
 
-(*
-    CODE: LA_EXPIRED
+    (*
+        CODE: LA_FAIL
 
-    MESSAGE: The product key has expired or system time has been tampered
-    with. Ensure your date and time settings are correct.
-*)
+        MESSAGE: Failure code.
+    *)
+
+  ELAFailException = class(ELAKeyStatusError)
+  public
+    constructor Create; overload;
+    constructor Create(const Msg: string); overload;
+    procedure AfterConstruction; override;
+  end;
+
+    (*
+        CODE: LA_EXPIRED
+
+        MESSAGE: The license has expired or system time has been tampered
+        with. Ensure your date and time settings are correct.
+    *)
 
   ELAExpiredError = class(ELAKeyStatusError)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_REVOKED
+    (*
+        CODE: LA_SUSPENDED
 
-    MESSAGE: The product key has been revoked.
-*)
+        MESSAGE: The license has been suspended.
+    *)
 
-  ELARevokedError = class(ELAKeyStatusError)
+  ELASuspendedError = class(ELAKeyStatusError)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_GP_OVER
+    (*
+        CODE: LA_GRACE_PERIOD_OVER
 
-    MESSAGE: The grace period is over.
-*)
+        MESSAGE: The grace period for server sync is over.
+    *)
 
-  ELAGPOverError = class(ELAKeyStatusError)
+  ELAGracePeriodOverError = class(ELAKeyStatusError)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_INET
+    (*
+        CODE: LA_TRIAL_EXPIRED
 
-    MESSAGE: Failed to connect to the server due to network error.
-*)
+        MESSAGE: The trial has expired or system time has been tampered
+        with. Ensure your date and time settings are correct.
+    *)
 
-  ELAInetException = class(ELAException)
+  ELATrialExpiredError = class(ELAKeyStatusError)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_PKEY
+    (*
+        CODE: LA_LOCAL_TRIAL_EXPIRED
 
-    MESSAGE: Invalid product key.
-*)
+        MESSAGE: The local trial has expired or system time has been tampered
+        with. Ensure your date and time settings are correct.
+    *)
 
-  ELAPKeyException = class(ELAException)
+  ELALocalTrialExpiredError = class(ELAKeyStatusError)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_PFILE
+    (*
+        CODE: LA_E_FILE_PATH
 
-    MESSAGE: Invalid or corrupted product file.
-*)
+        MESSAGE: Invalid file path.
+    *)
 
-  ELAPFileException = class(ELAException)
+  ELAFilePathException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_FPATH
+    (*
+        CODE: LA_E_PRODUCT_FILE
 
-    MESSAGE: Invalid product file path.
-*)
+        MESSAGE: Invalid or corrupted product file.
+    *)
 
-  ELAFPathException = class(ELAException)
+  ELAProductFileException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_GUID
+    (*
+        CODE: LA_E_PRODUCT_DATA
 
-    MESSAGE: The version GUID doesn't match that of the product file.
-*)
+        MESSAGE: Invalid product data.
+    *)
 
-  ELAGUIDException = class(ELAException)
-  public
-    constructor Create;
-  end;	// invalid version GUID
-
-(*
-    CODE: LA_E_OFILE
-
-    MESSAGE: Invalid offline activation response file.
-*)
-
-  ELAOFileException = class(ELAException)
+  ELAProductDataException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_PERMISSION
+    (*
+        CODE: LA_E_PRODUCT_ID
 
-    MESSAGE: Insufficent system permissions. Occurs when LA_SYSTEM flag is used
-    but application is not run with admin privileges.
-*)
+        MESSAGE: The product id is incorrect.
+    *)
 
-  ELAPermissionException = class(ELAException)
+  ELAProductIdException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_EDATA_LEN
+    (*
+        CODE: LA_E_SYSTEM_PERMISSION
 
-    MESSAGE: Extra activation data length is more than 256 characters.
-*)
+        MESSAGE: Insufficent system permissions. Occurs when LA_SYSTEM flag is used
+        but application is not run with admin privileges.
+    *)
 
-  ELAEDataLenException = class(ELAException)
+  ELASystemPermissionException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_TKEY
+    (*
+        CODE: LA_E_FILE_PERMISSION
 
-    MESSAGE: The trial key doesn't match that of the product file.
-*)
+        MESSAGE: No permission to write to file.
+    *)
 
-  ELATKeyException = class(ELAException)
+  ELAFilePermissionException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_TIME
+    (*
+        CODE: LA_E_WMIC
 
-    MESSAGE: The system time has been tampered with. Ensure your date
-    and time settings are correct.
-*)
-
-  ELATimeException = class(ELAException)
-  public
-    constructor Create;
-  end;
-
-(*
-    CODE: LA_E_VM
-
-    MESSAGE: Application is being run inside a virtual machine / hypervisor,
-    and activation has been disallowed in the VM.
-    but
-*)
-
-  ELAVMException = class(ELAException)
-  public
-    constructor Create;
-  end;
-
-(*
-    CODE: LA_E_WMIC
-
-    MESSAGE: Fingerprint couldn't be generated because Windows Management
-    Instrumentation (WMI) service has been disabled. This error is specific
-    to Windows only.
-*)
+        MESSAGE: Fingerprint couldn't be generated because Windows Management
+        Instrumentation (WMI) service has been disabled. This error is specific
+        to Windows only.
+    *)
 
   ELAWMICException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_TEXT_KEY
+    (*
+        CODE: LA_E_TIME
 
-    MESSAGE: Invalid trial extension key.
-*)
+        MESSAGE: The system time has been tampered with. Ensure your date
+        and time settings are correct.
+    *)
 
-  ELATExtKeyException = class(ELAException)
+  ELATimeException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_TRIAL_LEN
+    (*
+        CODE: LA_E_INET
 
-    MESSAGE: The trial length doesn't match that of the product file.
-*)
+        MESSAGE: Failed to connect to the server due to network error.
+    *)
 
-  ELATrialLenException = class(ELAException)
+  ELAInetException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_T_EXPIRED
+    (*
+        CODE: LA_E_NET_PROXY
 
-    MESSAGE: The trial has expired or system time has been tampered
-    with. Ensure your date and time settings are correct.
-*)
+        MESSAGE: Invalid network proxy.
+    *)
 
-  ELATExpiredError = class(ELAKeyStatusError)
+  ELANetProxyException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_TEXT_EXPIRED
+    (*
+        CODE: LA_E_HOST_URL
 
-    MESSAGE: The trial extension key being used has already expired or system
-    time has been tampered with. Ensure your date and time settings are correct.
-*)
+        MESSAGE: Invalid Cryptlex host url.
+    *)
 
-  ELATExtExpiredError = class(ELAKeyStatusError)
+  ELAHostURLException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_BUFFER_SIZE
+    (*
+        CODE: LA_E_BUFFER_SIZE
 
-    MESSAGE: The buffer size was smaller than required.
-*)
+        MESSAGE: The buffer size was smaller than required.
+    *)
 
   ELABufferSizeException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_CUSTOM_FIELD_ID
+    (*
+        CODE: LA_E_APP_VERSION_LENGTH
 
-    MESSAGE: Invalid custom field id.
-*)
+        MESSAGE: App version length is more than 256 characters.
+    *)
 
-  ELACustomFieldIdException = class(ELAException)
+  ELAAppVersionLengthException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_NET_PROXY
+    (*
+        CODE: LA_E_REVOKED
 
-    MESSAGE: Invalid network proxy.
-*)
+        MESSAGE: The license has been revoked.
+    *)
 
-  ELANetworkProxyException = class(ELAException)
+  ELARevokedException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_HOST_URL
+    (*
+        CODE: LA_E_LICENSE_KEY
 
-    MESSAGE: Invalid Cryptlex host url.
-*)
+        MESSAGE: Invalid license key.
+    *)
 
-  ELACryptlexHostException = class(ELAException)
+  ELALicenseKeyException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_DEACT_LIMIT
+    (*
+        CODE: LA_E_LICENSE_TYPE
 
-    MESSAGE: Deactivation limit for key has reached.
-*)
+        MESSAGE: Invalid license type. Make sure floating license
+        is not being used.
+    *)
 
-  ELADeactLimitException = class(ELAException)
+  ELALicenseTypeException = class(ELAException)
   public
     constructor Create;
   end;
 
-(*
-    CODE: LA_E_ACT_LIMIT
+    (*
+        CODE: LA_E_OFFLINE_RESPONSE_FILE
 
-    MESSAGE: Activation limit for key has reached.
-*)
+        MESSAGE: Invalid offline activation response file.
+    *)
 
-  ELAActLimitException = class(ELAException)
+  ELAOfflineResponseFileException = class(ELAException)
   public
     constructor Create;
   end;
 
+    (*
+        CODE: LA_E_OFFLINE_RESPONSE_FILE_EXPIRED
+
+        MESSAGE: The offline activation response has expired.
+    *)
+
+  ELAOfflineResponseFileExpiredException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_ACTIVATION_LIMIT
+
+        MESSAGE: The license has reached it's allowed activations limit.
+    *)
+
+  ELAActivationLimitException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_ACTIVATION_NOT_FOUND
+
+        MESSAGE: The license activation was deleted on the server.
+    *)
+
+  ELAActivationNotFoundException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_DEACTIVATION_LIMIT
+
+        MESSAGE: The license has reached it's allowed deactivations limit.
+    *)
+
+  ELADeactivationLimitException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_TRIAL_NOT_ALLOWED
+
+        MESSAGE: Trial not allowed for the product.
+    *)
+
+  ELATrialNotAllowedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_TRIAL_ACTIVATION_LIMIT
+
+        MESSAGE: Your account has reached it's trial activations limit.
+    *)
+
+  ELATrialActivationLimitException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_MACHINE_FINGERPRINT
+
+        MESSAGE: Machine fingerprint has changed since activation.
+    *)
+
+  ELAMachineFingerprintException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_METADATA_KEY_LENGTH
+
+        MESSAGE: Metadata key length is more than 256 characters.
+    *)
+
+  ELAMetadataKeyLengthException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_METADATA_VALUE_LENGTH
+
+        MESSAGE: Metadata value length is more than 256 characters.
+    *)
+
+  ELAMetadataValueLengthException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_ACTIVATION_METADATA_LIMIT
+
+        MESSAGE: The license has reached it's metadata fields limit.
+    *)
+
+  ELAActivationMetadataLimitException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_TRIAL_ACTIVATION_METADATA_LIMIT
+
+        MESSAGE: The trial has reached it's metadata fields limit.
+    *)
+
+  ELATrialActivationMetadataLimitException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_METADATA_KEY_NOT_FOUND
+
+        MESSAGE: The metadata key does not exist.
+    *)
+
+  ELAMetadataKeyNotFoundException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_VM
+
+        MESSAGE: Application is being run inside a virtual machine / hypervisor,
+        and activation has been disallowed in the VM.
+    *)
+
+  ELAVMException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_COUNTRY
+
+        MESSAGE: Country is not allowed.
+    *)
+
+  ELACountryException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_IP
+
+        MESSAGE: IP address is not allowed.
+    *)
+
+  ELAIPException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_RATE_LIMIT
+
+        MESSAGE: Rate limit for API has reached, try again later.
+    *)
+
+  ELARateLimitException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_SERVER
+
+        MESSAGE: Server error.
+    *)
+
+  ELAServerException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CLIENT
+
+        MESSAGE: Client error.
+    *)
+
+  ELAClientException = class(ELAException)
+  public
+    constructor Create;
+  end;
 
 implementation
 
 uses
 {$IFDEF DELPHI_UNITS_SCOPED}
-  System.TypInfo
+  System.TypInfo, System.DateUtils, System.Classes, Winapi.Windows
 {$ELSE}
-  TypInfo
+  TypInfo, DateUtils, Classes, Windows
 {$ENDIF}
   ;
 
@@ -865,7 +1168,6 @@ const
 
 const
   LAFlagsToLongWord: array[TLAFlags] of LongWord = (1, 2);
-  LATrialTypeToLongWord: array[TLATrialType] of LongWord = (1, 2);
 
 function LAFlagsToString(Item: TLAFlags): string;
 begin
@@ -873,18 +1175,6 @@ begin
   begin
     // sane value
     Result := GetEnumName(TypeInfo(TLAFlags), Integer(Item));
-  end else begin
-    // invalid value, should not appear
-    Result := '$' + IntToHex(Integer(Item), 2 * SizeOf(Item));
-  end;
-end;
-
-function LATrialTypeToString(Item: TLATrialType): string;
-begin
-  if (Item >= Low(TLATrialType)) and (Item <= High(TLATrialType)) then
-  begin
-    // sane value
-    Result := GetEnumName(TypeInfo(TLATrialType), Integer(Item));
   end else begin
     // invalid value, should not appear
     Result := '$' + IntToHex(Integer(Item), 2 * SizeOf(Item));
@@ -906,601 +1196,1140 @@ end;
 (*** Return Codes ***)
 
 const
-  LA_OK            = HRESULT($00000000);
 
-  LA_FAIL          = HRESULT($00000001);
+    (*
+        CODE: LA_OK
 
-(*
-    CODE: LA_EXPIRED
+        MESSAGE: Success code.
+    *)
 
-    MESSAGE: The product key has expired or system time has been tampered
-    with. Ensure your date and time settings are correct.
-*)
+  LA_OK = TLAStatusCode(0);
 
-  LA_EXPIRED	     = HRESULT($00000002);
+    (*
+        CODE: LA_FAIL
 
-(*
-    CODE: LA_REVOKED
+        MESSAGE: Failure code.
+    *)
 
-    MESSAGE: The product key has been revoked.
-*)
+  LA_FAIL = TLAStatusCode(1);
 
-  LA_REVOKED       = HRESULT($00000003);
+    (*
+        CODE: LA_EXPIRED
 
-(*
-    CODE: LA_GP_OVER
+        MESSAGE: The license has expired or system time has been tampered
+        with. Ensure your date and time settings are correct.
+    *)
 
-    MESSAGE: The grace period is over.
-*)
+  LA_EXPIRED = TLAStatusCode(20);
 
-  LA_GP_OVER       = HRESULT($00000004);
+    (*
+        CODE: LA_SUSPENDED
 
-(*
-    CODE: LA_E_INET
+        MESSAGE: The license has been suspended.
+    *)
 
-    MESSAGE: Failed to connect to the server due to network error.
-*)
+  LA_SUSPENDED = TLAStatusCode(21);
 
-  LA_E_INET        = HRESULT($00000005);
+    (*
+        CODE: LA_GRACE_PERIOD_OVER
 
-(*
-    CODE: LA_E_PKEY
+        MESSAGE: The grace period for server sync is over.
+    *)
 
-    MESSAGE: Invalid product key.
-*)
+  LA_GRACE_PERIOD_OVER = TLAStatusCode(22);
 
-  LA_E_PKEY        = HRESULT($00000006);
+    (*
+        CODE: LA_TRIAL_EXPIRED
 
-(*
-    CODE: LA_E_PFILE
+        MESSAGE: The trial has expired or system time has been tampered
+        with. Ensure your date and time settings are correct.
+    *)
 
-    MESSAGE: Invalid or corrupted product file.
-*)
+  LA_TRIAL_EXPIRED = TLAStatusCode(25);
 
-  LA_E_PFILE       = HRESULT($00000007);
+    (*
+        CODE: LA_LOCAL_TRIAL_EXPIRED
 
-(*
-    CODE: LA_E_FPATH
+        MESSAGE: The local trial has expired or system time has been tampered
+        with. Ensure your date and time settings are correct.
+    *)
 
-    MESSAGE: Invalid product file path.
-*)
+  LA_LOCAL_TRIAL_EXPIRED = TLAStatusCode(26);
 
-  LA_E_FPATH       = HRESULT($00000008);
+    (*
+        CODE: LA_E_FILE_PATH
 
-(*
-    CODE: LA_E_GUID
+        MESSAGE: Invalid file path.
+    *)
 
-    MESSAGE: The version GUID doesn't match that of the product file.
-*)
+  LA_E_FILE_PATH = TLAStatusCode(40);
 
-  LA_E_GUID        = HRESULT($00000009);	// invalid version GUID
+    (*
+        CODE: LA_E_PRODUCT_FILE
 
-(*
-    CODE: LA_E_OFILE
+        MESSAGE: Invalid or corrupted product file.
+    *)
 
-    MESSAGE: Invalid offline activation response file.
-*)
+  LA_E_PRODUCT_FILE = TLAStatusCode(41);
 
-  LA_E_OFILE       = HRESULT($0000000A);
+    (*
+        CODE: LA_E_PRODUCT_DATA
 
-(*
-    CODE: LA_E_PERMISSION
+        MESSAGE: Invalid product data.
+    *)
 
-    MESSAGE: Insufficent system permissions. Occurs when LA_SYSTEM flag is used
-    but application is not run with admin privileges.
-*)
+  LA_E_PRODUCT_DATA = TLAStatusCode(42);
 
-  LA_E_PERMISSION  = HRESULT($0000000B);
+    (*
+        CODE: LA_E_PRODUCT_ID
 
-(*
-    CODE: LA_E_EDATA_LEN
+        MESSAGE: The product id is incorrect.
+    *)
 
-    MESSAGE: Extra activation data length is more than 256 characters.
-*)
+  LA_E_PRODUCT_ID = TLAStatusCode(43);
 
-  LA_E_EDATA_LEN   = HRESULT($0000000C);
+    (*
+        CODE: LA_E_SYSTEM_PERMISSION
 
-(*
-    CODE: LA_E_TKEY
+        MESSAGE: Insufficent system permissions. Occurs when LA_SYSTEM flag is used
+        but application is not run with admin privileges.
+    *)
 
-    MESSAGE: The trial key doesn't match that of the product file.
-*)
+  LA_E_SYSTEM_PERMISSION = TLAStatusCode(44);
 
-  LA_E_TKEY        = HRESULT($0000000D);
+    (*
+        CODE: LA_E_FILE_PERMISSION
 
-(*
-    CODE: LA_E_TIME
+        MESSAGE: No permission to write to file.
+    *)
 
-    MESSAGE: The system time has been tampered with. Ensure your date
-    and time settings are correct.
-*)
+  LA_E_FILE_PERMISSION = TLAStatusCode(45);
 
-  LA_E_TIME        = HRESULT($0000000E);
+    (*
+        CODE: LA_E_WMIC
 
-(*
-    CODE: LA_E_VM
+        MESSAGE: Fingerprint couldn't be generated because Windows Management
+        Instrumentation (WMI) service has been disabled. This error is specific
+        to Windows only.
+    *)
 
-    MESSAGE: Application is being run inside a virtual machine / hypervisor,
-    and activation has been disallowed in the VM.
-    but
-*)
+  LA_E_WMIC = TLAStatusCode(46);
 
-  LA_E_VM          = HRESULT($0000000F);
+    (*
+        CODE: LA_E_TIME
 
-(*
-    CODE: LA_E_WMIC
+        MESSAGE: The system time has been tampered with. Ensure your date
+        and time settings are correct.
+    *)
 
-    MESSAGE: Fingerprint couldn't be generated because Windows Management
-    Instrumentation (WMI) service has been disabled. This error is specific
-    to Windows only.
-*)
+  LA_E_TIME = TLAStatusCode(47);
 
-  LA_E_WMIC        = HRESULT($00000010);
+    (*
+        CODE: LA_E_INET
 
-(*
-    CODE: LA_E_TEXT_KEY
+        MESSAGE: Failed to connect to the server due to network error.
+    *)
 
-    MESSAGE: Invalid trial extension key.
-*)
+  LA_E_INET = TLAStatusCode(48);
 
-  LA_E_TEXT_KEY    = HRESULT($00000011);
+    (*
+        CODE: LA_E_NET_PROXY
 
-(*
-    CODE: LA_E_TRIAL_LEN
+        MESSAGE: Invalid network proxy.
+    *)
 
-    MESSAGE: The trial length doesn't match that of the product file.
-*)
+  LA_E_NET_PROXY = TLAStatusCode(49);
 
-  LA_E_TRIAL_LEN   = HRESULT($00000012);
+    (*
+        CODE: LA_E_HOST_URL
 
-(*
-    CODE: LA_T_EXPIRED
+        MESSAGE: Invalid Cryptlex host url.
+    *)
 
-    MESSAGE: The trial has expired or system time has been tampered
-    with. Ensure your date and time settings are correct.
-*)
+  LA_E_HOST_URL = TLAStatusCode(50);
 
-  LA_T_EXPIRED     = HRESULT($00000013);
+    (*
+        CODE: LA_E_BUFFER_SIZE
 
-(*
-    CODE: LA_TEXT_EXPIRED
+        MESSAGE: The buffer size was smaller than required.
+    *)
 
-    MESSAGE: The trial extension key being used has already expired or system
-    time has been tampered with. Ensure your date and time settings are correct.
-*)
+  LA_E_BUFFER_SIZE = TLAStatusCode(51);
 
-  LA_TEXT_EXPIRED  = HRESULT($00000014);
+    (*
+        CODE: LA_E_APP_VERSION_LENGTH
 
-(*
-    CODE: LA_E_BUFFER_SIZE
+        MESSAGE: App version length is more than 256 characters.
+    *)
 
-    MESSAGE: The buffer size was smaller than required.
-*)
+  LA_E_APP_VERSION_LENGTH = TLAStatusCode(52);
 
-  LA_E_BUFFER_SIZE = HRESULT($00000015);
+    (*
+        CODE: LA_E_REVOKED
 
-(*
-    CODE: LA_E_CUSTOM_FIELD_ID
+        MESSAGE: The license has been revoked.
+    *)
 
-    MESSAGE: Invalid custom field id.
-*)
+  LA_E_REVOKED = TLAStatusCode(53);
 
-  LA_E_CUSTOM_FIELD_ID = HRESULT($00000016);
+    (*
+        CODE: LA_E_LICENSE_KEY
 
-(*
-    CODE: LA_E_NET_PROXY
+        MESSAGE: Invalid license key.
+    *)
 
-    MESSAGE: Invalid custom field id.
-*)
+  LA_E_LICENSE_KEY = TLAStatusCode(54);
 
-  LA_E_NET_PROXY = HRESULT($00000017);
+    (*
+        CODE: LA_E_LICENSE_TYPE
 
-(*
-    CODE: LA_E_HOST_URL
+        MESSAGE: Invalid license type. Make sure floating license
+        is not being used.
+    *)
 
-    MESSAGE: Invalid custom field id.
-*)
+  LA_E_LICENSE_TYPE = TLAStatusCode(55);
 
-  LA_E_HOST_URL = HRESULT($00000018);
+    (*
+        CODE: LA_E_OFFLINE_RESPONSE_FILE
 
-(*
-    CODE: LA_E_DEACT_LIMIT
+        MESSAGE: Invalid offline activation response file.
+    *)
 
-    MESSAGE: Deactivation limit for key has reached.
-*)
+  LA_E_OFFLINE_RESPONSE_FILE = TLAStatusCode(56);
 
-  LA_E_DEACT_LIMIT = HRESULT($00000019);
+    (*
+        CODE: LA_E_OFFLINE_RESPONSE_FILE_EXPIRED
 
-(*
-    CODE: LA_E_ACT_LIMIT
+        MESSAGE: The offline activation response has expired.
+    *)
 
-    MESSAGE: Activation limit for key has reached.
-*)
+  LA_E_OFFLINE_RESPONSE_FILE_EXPIRED = TLAStatusCode(57);
 
-  LA_E_ACT_LIMIT = HRESULT($0000001A);
+    (*
+        CODE: LA_E_ACTIVATION_LIMIT
 
+        MESSAGE: The license has reached it's allowed activations limit.
+    *)
 
+  LA_E_ACTIVATION_LIMIT = TLAStatusCode(58);
 
-function Thin_SetProductFile(const filePath: PWideChar): HRESULT; cdecl;
+    (*
+        CODE: LA_E_ACTIVATION_NOT_FOUND
+
+        MESSAGE: The license activation was deleted on the server.
+    *)
+
+  LA_E_ACTIVATION_NOT_FOUND = TLAStatusCode(59);
+
+    (*
+        CODE: LA_E_DEACTIVATION_LIMIT
+
+        MESSAGE: The license has reached it's allowed deactivations limit.
+    *)
+
+  LA_E_DEACTIVATION_LIMIT = TLAStatusCode(60);
+
+    (*
+        CODE: LA_E_TRIAL_NOT_ALLOWED
+
+        MESSAGE: Trial not allowed for the product.
+    *)
+
+  LA_E_TRIAL_NOT_ALLOWED = TLAStatusCode(61);
+
+    (*
+        CODE: LA_E_TRIAL_ACTIVATION_LIMIT
+
+        MESSAGE: Your account has reached it's trial activations limit.
+    *)
+
+  LA_E_TRIAL_ACTIVATION_LIMIT = TLAStatusCode(62);
+
+    (*
+        CODE: LA_E_MACHINE_FINGERPRINT
+
+        MESSAGE: Machine fingerprint has changed since activation.
+    *)
+
+  LA_E_MACHINE_FINGERPRINT = TLAStatusCode(63);
+
+    (*
+        CODE: LA_E_METADATA_KEY_LENGTH
+
+        MESSAGE: Metadata key length is more than 256 characters.
+    *)
+
+  LA_E_METADATA_KEY_LENGTH = TLAStatusCode(64);
+
+    (*
+        CODE: LA_E_METADATA_VALUE_LENGTH
+
+        MESSAGE: Metadata value length is more than 256 characters.
+    *)
+
+  LA_E_METADATA_VALUE_LENGTH = TLAStatusCode(65);
+
+    (*
+        CODE: LA_E_ACTIVATION_METADATA_LIMIT
+
+        MESSAGE: The license has reached it's metadata fields limit.
+    *)
+
+  LA_E_ACTIVATION_METADATA_LIMIT = TLAStatusCode(66);
+
+    (*
+        CODE: LA_E_TRIAL_ACTIVATION_METADATA_LIMIT
+
+        MESSAGE: The trial has reached it's metadata fields limit.
+    *)
+
+  LA_E_TRIAL_ACTIVATION_METADATA_LIMIT = TLAStatusCode(67);
+
+    (*
+        CODE: LA_E_METADATA_KEY_NOT_FOUND
+
+        MESSAGE: The metadata key does not exist.
+    *)
+
+  LA_E_METADATA_KEY_NOT_FOUND = TLAStatusCode(68);
+
+    (*
+        CODE: LA_E_VM
+
+        MESSAGE: Application is being run inside a virtual machine / hypervisor,
+        and activation has been disallowed in the VM.
+    *)
+
+  LA_E_VM = TLAStatusCode(80);
+
+    (*
+        CODE: LA_E_COUNTRY
+
+        MESSAGE: Country is not allowed.
+    *)
+
+  LA_E_COUNTRY = TLAStatusCode(81);
+
+    (*
+        CODE: LA_E_IP
+
+        MESSAGE: IP address is not allowed.
+    *)
+
+  LA_E_IP = TLAStatusCode(82);
+
+    (*
+        CODE: LA_E_RATE_LIMIT
+
+        MESSAGE: Rate limit for API has reached, try again later.
+    *)
+
+  LA_E_RATE_LIMIT = TLAStatusCode(90);
+
+    (*
+        CODE: LA_E_SERVER
+
+        MESSAGE: Server error.
+    *)
+
+  LA_E_SERVER = TLAStatusCode(91);
+
+    (*
+        CODE: LA_E_CLIENT
+
+        MESSAGE: Client error.
+    *)
+
+  LA_E_CLIENT = TLAStatusCode(92);
+
+(*********************************************************************************)
+
+function Thin_SetProductFile(const filePath: PWideChar): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'SetProductFile';
 
 procedure SetProductFile(const FilePath: UnicodeString);
 begin
   if not ELAError.CheckOKFail(Thin_SetProductFile(PWideChar(FilePath))) then
     raise
-    ELAFailException.CreateFmt('Failed to set the path of the Product.dat ' +
-      'file to %s', [FilePath]);
+    ELAFailException.Create('Failed to set the path of the Product.dat file');
 end;
 
-function Thin_SetVersionGUID(versionGUID: PWideChar; flags: LongWord): HRESULT;
-  cdecl; external LexActivator_DLL name 'SetVersionGUID';
+function Thin_SetProductData(const productData: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetProductData';
 
-procedure SetVersionGUID(const VersionGUID: UnicodeString; Flags: TLAFlags);
+procedure SetProductData(const ProductData: UnicodeString);
 begin
-  if not ELAError.CheckOKFail(Thin_SetVersionGUID(PWideChar(VersionGUID),
-    LAFlagsToLongWord[Flags])) then
-    raise ELAFailException.CreateFmt('Failed to set the version GUID of ' +
-      'application to %s', [VersionGUID]);
+  if not ELAError.CheckOKFail(Thin_SetProductData(PWideChar(ProductData))) then
+    raise
+    ELAFailException.Create('Failed to embed the Product.dat file in the application');
 end;
 
-function Thin_SetProductKey(const productKey: PWideChar): HRESULT; cdecl;
-  external LexActivator_DLL name 'SetProductKey';
+function Thin_SetProductId(const productId: PWideChar; flags: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetProductId';
 
-procedure SetProductKey(const ProductKey: UnicodeString);
+procedure SetProductId(const ProductId: UnicodeString; Flags: TLAFlags);
 begin
-  if not ELAError.CheckOKFail(Thin_SetProductKey(PWideChar(ProductKey))) then
-    raise ELAFailException.CreateFmt('Failed to set the product key to %s',
-      [ProductKey]);
+  if not ELAError.CheckOKFail(Thin_SetProductId(PWideChar(ProductId), LAFlagsToLongWord[Flags])) then
+    raise
+    ELAFailException.CreateFmt('Failed to set the product id of the application ' +
+      'to %s', [ProductId]);
 end;
 
-function Thin_SetExtraActivationData(extraData: PWideChar): HRESULT; cdecl;
-  external LexActivator_DLL name 'SetExtraActivationData';
+function Thin_SetLicenseKey(const licenseKey: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetLicenseKey';
 
-procedure SetExtraActivationData(const ExtraData: UnicodeString);
+procedure SetLicenseKey(const LicenseKey: UnicodeString);
 begin
-  if not ELAError.CheckOKFail(Thin_SetExtraActivationData(PWideChar(ExtraData))) then
-    raise ELAFailException.Create('Failed to set the extra data');
+  if not ELAError.CheckOKFail(Thin_SetLicenseKey(PWideChar(LicenseKey))) then
+    raise
+    ELAFailException.Create('Failed to set the license key');
 end;
 
-function Thin_ActivateProduct: HRESULT; cdecl;
-  external LexActivator_DLL name 'ActivateProduct';
+type
+  TLAThin_CallbackType = procedure (StatusCode: LongWord); cdecl;
 
-function ActivateProduct: TLAKeyStatus;
-begin
-  Result := ELAError.CheckKeyStatus(Thin_ActivateProduct);
-  if lkFail = Result then
-    raise ELAFailException.Create('Failed to activate application');
-end;
+function Thin_SetLicenseCallback(callback: TLAThin_CallbackType): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetLicenseCallback';
 
-function Thin_DeactivateProduct: HRESULT; cdecl;
-  external LexActivator_DLL name 'DeactivateProduct';
+type
+  TLALicenseCallbackKind =
+    (lckNone,
+     lckProcedure,
+     lckMethod
+     {$IFDEF DELPHI_HAS_CLOSURES}, lckClosure{$ENDIF});
 
-function DeactivateProduct: TLAKeyStatus;
-begin
-  Result := ELAError.CheckKeyStatus(Thin_DeactivateProduct);
-  if lkFail = Result then
-    raise ELAFailException.Create('Failed to deactivate application');
-end;
-
-function Thin_ActivateProductOffline(const filePath: PWideChar): HRESULT; cdecl;
-  external LexActivator_DLL name 'ActivateProductOffline';
-
-function ActivateProductOffline(const FilePath: UnicodeString): TLAKeyStatus;
-begin
-  Result := ELAError.CheckKeyStatus(Thin_ActivateProductOffline(PWideChar(FilePath)));
-  if lkFail = Result then
-    raise ELAFailException.CreateFmt('Failed to activate application using ' +
-      'the offline activation response file %s', [FilePath]);
-end;
-
-function Thin_GenerateOfflineActivationRequest(const filePath: PWideChar): HRESULT; cdecl;
-  external LexActivator_DLL name 'GenerateOfflineActivationRequest';
-
-procedure GenerateOfflineActivationRequest(const FilePath: UnicodeString);
-begin
-  if not ELAError.CheckOKFail(Thin_GenerateOfflineActivationRequest(PWideChar(FilePath))) then
-    raise ELAFailException.Create('Failed to generate the offline activation request');
-end;
-
-function Thin_GenerateOfflineDeactivationRequest(const filePath: PWideChar): HRESULT; cdecl;
-  external LexActivator_DLL name 'GenerateOfflineDeactivationRequest';
-
-procedure GenerateOfflineDeactivationRequest(const FilePath: UnicodeString);
-begin
-  if not ELAError.CheckOKFail(Thin_GenerateOfflineDeactivationRequest(PWideChar(FilePath))) then
-    raise ELAFailException.Create('Failed to generate the offline deactivation request');
-end;
-
-function Thin_IsProductGenuine: HRESULT; cdecl;
-  external LexActivator_DLL name 'IsProductGenuine';
-
-function IsProductGenuine: TLAKeyStatus;
-begin
-  Result := ELAError.CheckKeyStatus(Thin_IsProductGenuine);
-  if lkFail = Result then
-    raise ELAFailException.Create('Failed to verify whether app is genuinely ' +
-      'activated or not');
-end;
-
-function Thin_IsProductActivated: HRESULT; cdecl;
-  external LexActivator_DLL name 'IsProductActivated';
-
-function IsProductActivated: TLAKeyStatus;
-begin
-  Result := ELAError.CheckKeyStatus(Thin_IsProductActivated);
-  if lkFail = Result then
-    raise ELAFailException.Create('Failed to verify whether app is genuinely ' +
-      'activated or not');
-end;
-
-function Thin_GetExtraActivationData(out extraData; length: LongWord): HRESULT; cdecl;
-  external LexActivator_DLL name 'GetExtraActivationData';
-
-function GetExtraActivationData: UnicodeString;
 var
-  ErrorCode: HRESULT;
-  function Try256(var OuterResult: UnicodeString): Boolean;
-  var
-    Buffer: array[0 .. 255] of WideChar;
-  begin
-    ErrorCode := Thin_GetExtraActivationData(Buffer, Length(Buffer));
-    Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
-  end;
-  function Try1024(var OuterResult: UnicodeString): Boolean;
-  var
-    Buffer: array[0 .. 1023] of WideChar;
-  begin
-    ErrorCode := Thin_GetExtraActivationData(Buffer, Length(Buffer));
-    Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
-  end;
-  function Try4096(var OuterResult: UnicodeString): Boolean;
-  var
-    Buffer: array[0 .. 4095] of WideChar;
-  begin
-    ErrorCode := Thin_GetExtraActivationData(Buffer, Length(Buffer));
-    Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
-  end;
-begin
-  if not Try256(Result) then if not Try1024(Result) then Try4096(Result);
-  if not ELAError.CheckOKFail(ErrorCode) then
-    raise ELAFailException.Create('Failed to get the value of the extra activation data');
-end;
+  LALicenseCallbackKind: TLALicenseCallbackKind = lckNone;
+  LAProcedureCallback: TLAProcedureCallback;
+  LAMethodCallback: TLAMethodCallback;
+  {$IFDEF DELPHI_HAS_CLOSURES}
+  LAClosure: TLAClosureCallback;
+  {$ENDIF}
+  LALicenseCallbackSynchronized: Boolean;
+  LAStatusCode: TLAStatusCode;
+  LALicenseCallbackMutex: TRTLCriticalSection;
 
-function Thin_GetCustomLicenseField(const fieldId: PWideChar; out fieldValue;
-  length: LongWord): HRESULT; cdecl;
-  external LexActivator_DLL name 'GetCustomLicenseField';
+type
+  TLAThin_CallbackProxyClass = class
+  public
+    class procedure Invoke;
+  end;
 
-function GetCustomLicenseField(const FieldId: UnicodeString): UnicodeString;
+class procedure TLAThin_CallbackProxyClass.Invoke;
 var
-  Arg1: PWideChar;
-  ErrorCode: HRESULT;
-  function Try256(var OuterResult: UnicodeString): Boolean;
-  var
-    Buffer: array[0 .. 255] of WideChar;
-  begin
-    ErrorCode := Thin_GetCustomLicenseField(Arg1, Buffer, Length(Buffer));
-    Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
-  end;
-  function Try1024(var OuterResult: UnicodeString): Boolean;
-  var
-    Buffer: array[0 .. 1023] of WideChar;
-  begin
-    ErrorCode := Thin_GetCustomLicenseField(Arg1, Buffer, Length(Buffer));
-    Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
-  end;
-  function Try4096(var OuterResult: UnicodeString): Boolean;
-  var
-    Buffer: array[0 .. 4095] of WideChar;
-  begin
-    ErrorCode := Thin_GetCustomLicenseField(Arg1, Buffer, Length(Buffer));
-    Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
-  end;
-begin
-  Arg1 := PWideChar(FieldId);
-  if not Try256(Result) then if not Try1024(Result) then Try4096(Result);
-  if not ELAError.CheckOKFail(ErrorCode) then
-    raise ELAFailException.CreateFmt('Failed to get the value of the custom '+
-      'field %s associated with the product key', [FieldId]);
-end;
+  KeyStatus: TLAKeyStatus;
 
-function Thin_GetProductKey(out productKey; length: LongWord): HRESULT; cdecl;
-  external LexActivator_DLL name 'GetProductKey';
+  procedure DoInvoke(const Error: Exception);
+  begin
+    case LALicenseCallbackKind of
+      lckNone: Exit;
+      lckProcedure:
+        if Assigned(LAProcedureCallback) then
+          LAProcedureCallback(Error, KeyStatus);
+      lckMethod:
+        if Assigned(LAMethodCallback) then
+          LAMethodCallback(Error, KeyStatus);
+      {$IFDEF DELPHI_HAS_CLOSURES}
+      lckClosure:
+        if Assigned(LAClosureCallback) then
+          LAClosureCallback(Error, KeyStatus);
+      {$ENDIF}
+    else
+      // there should be default logging here like NSLog, but there is none in Delphi
+    end;
+  end;
 
-function GetProductKey: UnicodeString;
 var
-  ErrorCode: HRESULT;
-  function Try256(var OuterResult: UnicodeString): Boolean;
-  var
-    Buffer: array[0 .. 255] of WideChar;
-  begin
-    ErrorCode := Thin_GetProductKey(Buffer, Length(Buffer));
-    Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
+  FailError: Exception;
+
+begin
+  try
+    try
+      EnterCriticalSection(LALicenseCallbackMutex);
+
+      case LALicenseCallbackKind of
+        lckNone: Exit;
+        lckProcedure: if not Assigned(LAProcedureCallback) then Exit;
+        lckMethod: if not Assigned(LAMethodCallback) then Exit;
+        {$IFDEF DELPHI_HAS_CLOSURES}
+        lckClosure: if not Assigned(LAClosureCallback) then Exit;
+        {$ENDIF}
+      else
+        // there should be default logging here like NSLog, but there is none in Delphi
+      end;
+
+      try
+        KeyStatus := ELAError.CheckKeyStatus(LAStatusCode);
+      except
+        on Error: ELAError do
+        begin
+          KeyStatus := lkException;
+          DoInvoke(Error);
+          Exit;
+        end;
+      end;
+
+      FailError := nil;
+      try
+        FailError := ELAError.CreateByCode(LAStatusCode);
+        DoInvoke(FailError);
+      finally
+        FreeAndNil(FailError);
+      end;
+    finally
+      // This recursive mutex prevents the following scenario:
+      //
+      // (Main thread)    SetLicenseCallback
+      // (Tangent thread) LAThin_CallbackProxy going to invoke X.OnLexActivator
+      // (Main thread)    ResetLicenseCallback
+      // (Main thread)    X.Free
+      //
+      // Main thread is not allowed to proceed to X.Free until callback is finished
+      // On the other hand, if callback removes itself, recursive mutex will allow that
+      LeaveCriticalSection(LALicenseCallbackMutex);
+    end;
+  except
+    // there should be default logging here like NSLog, but there is none in Delphi
   end;
-  function Try1024(var OuterResult: UnicodeString): Boolean;
-  var
-    Buffer: array[0 .. 1023] of WideChar;
-  begin
-    ErrorCode := Thin_GetProductKey(Buffer, Length(Buffer));
-    Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
+end;
+
+procedure LAThin_CallbackProxy(StatusCode: LongWord); cdecl;
+begin
+  try
+    try
+      EnterCriticalSection(LALicenseCallbackMutex);
+
+      case LALicenseCallbackKind of
+        lckNone: Exit;
+        lckProcedure: if not Assigned(LAProcedureCallback) then Exit;
+        lckMethod: if not Assigned(LAMethodCallback) then Exit;
+        {$IFDEF DELPHI_HAS_CLOSURES}
+        lckClosure: if not Assigned(LAClosureCallback) then Exit;
+        {$ENDIF}
+      else
+        // there should be default logging here like NSLog, but there is none in Delphi
+      end;
+
+      LAStatusCode := TLAStatusCode(StatusCode);
+      if not LALicenseCallbackSynchronized then
+      begin
+        TLAThin_CallbackProxyClass.Invoke;
+        Exit;
+      end;
+    finally
+      LeaveCriticalSection(LALicenseCallbackMutex);
+    end;
+
+    // Race condition here
+    //
+    // Invoke should proably run exactly the same (captured) handler,
+    // but instead it reenters mutex, and handler can be different at
+    // that moment. For most sane use cases behavior should be sound
+    // anyway.
+
+    TThread.Synchronize(nil, TLAThin_CallbackProxyClass.Invoke);
+  except
+    // there should be default logging here like NSLog, but there is none in Delphi
   end;
-  function Try4096(var OuterResult: UnicodeString): Boolean;
-  var
-    Buffer: array[0 .. 4095] of WideChar;
-  begin
-    ErrorCode := Thin_GetProductKey(Buffer, Length(Buffer));
-    Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
+end;
+
+procedure SetLicenseCallback(Callback: TLAProcedureCallback; Synchronized: Boolean);
+begin
+  try
+    EnterCriticalSection(LALicenseCallbackMutex);
+
+    LAProcedureCallback := Callback;
+    LALicenseCallbackSynchronized := Synchronized;
+    LALicenseCallbackKind := lckProcedure;
+
+    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
+      raise
+      ELAFailException.Create('Failed to set server sync callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex);
   end;
-begin
-  if not Try256(Result) then if not Try1024(Result) then Try4096(Result);
-  if not ELAError.CheckOKFail(ErrorCode) then
-    raise ELAFailException.Create('Failed to get the stored product key');
 end;
 
-function Thin_GetDaysLeftToExpiration(out daysLeft: LongWord): HRESULT; cdecl;
-  external LexActivator_DLL name 'GetDaysLeftToExpiration';
-
-function GetDaysLeftToExpiration: LongWord;
+procedure SetLicenseCallback(Callback: TLAMethodCallback; Synchronized: Boolean);
 begin
-  if not ELAError.CheckOKFail(Thin_GetDaysLeftToExpiration(Result)) then
-    raise ELAFailException.Create('Failed to get the number of remaining ' +
-      'days after which the license expires');
+  try
+    EnterCriticalSection(LALicenseCallbackMutex);
+
+    LAMethodCallback := Callback;
+    LALicenseCallbackSynchronized := Synchronized;
+    LALicenseCallbackKind := lckMethod;
+
+    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
+      raise
+      ELAFailException.Create('Failed to set server sync callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex);
+  end;
 end;
 
-function Thin_SetTrialKey(const trialKey: PWideChar): HRESULT; cdecl;
-  external LexActivator_DLL name 'SetTrialKey';
-
-procedure SetTrialKey(const TrialKey: UnicodeString);
+{$IFDEF DELPHI_HAS_CLOSURES}
+procedure SetLicenseCallback(Callback: TLAClosureCallback; Synchronized: Boolean);
 begin
-  if not ELAError.CheckOKFail(Thin_SetTrialKey(PWideChar(TrialKey))) then
-    raise ELAFailException.CreateFmt('Failed to set the trial key %s',
-      [TrialKey]);
+  try
+    EnterCriticalSection(LALicenseCallbackMutex);
+
+    LAClosureCallback := Callback;
+    LALicenseCallbackSynchronized := Synchronized;
+    LALicenseCallbackKind := lckClosure;
+
+    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
+      raise
+      ELAFailException.Create('Failed to set server sync callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex);
+  end;
+end;
+{$ENDIF}
+
+procedure LAThin_CallbackDummy(StatusCode: LongWord); cdecl;
+begin
+  ;
 end;
 
-function Thin_ActivateTrial: HRESULT; cdecl;
-  external LexActivator_DLL name 'ActivateTrial';
-
-function ActivateTrial: TLAKeyStatus;
+procedure ResetLicenseCallback;
 begin
-  Result := ELAError.CheckKeyStatus(Thin_ActivateTrial);
-  if lkFail = Result then
-    raise ELAFailException.Create('Failed to start the verified trial');
+  try
+    EnterCriticalSection(LALicenseCallbackMutex);
+
+    LALicenseCallbackKind := lckNone;
+
+    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackDummy)) then
+      raise
+      ELAFailException.Create('Failed to set server sync callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex);
+  end;
 end;
 
-function Thin_IsTrialGenuine: HRESULT; cdecl;
-  external LexActivator_DLL name 'IsTrialGenuine';
+function Thin_SetActivationMetadata(const key, value: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetActivationMetadata';
 
-function IsTrialGenuine: TLAKeyStatus;
+procedure SetActivationMetadata(const Key, Value: UnicodeString);
 begin
-  Result := ELAError.CheckKeyStatus(Thin_IsTrialGenuine);
-  if lkFail = Result then
-    raise ELAFailException.Create('Failed to verify whether trial has ' +
-      'started and is genuine or not');
+  if not ELAError.CheckOKFail(Thin_SetActivationMetadata(PWideChar(Key), PWideChar(Value))) then
+    raise
+    ELAFailException.Create('Failed to set the activation metadata');
 end;
 
-function Thin_ExtendTrial(const trialExtensionKey: PWideChar): HRESULT; cdecl;
-  external LexActivator_DLL name 'ExtendTrial';
+function Thin_SetTrialActivationMetadata(const key, value: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetTrialActivationMetadata';
 
-function ExtendTrial(const TrialExtensionKey: UnicodeString): TLAKeyStatus;
+procedure SetTrialActivationMetadata(const Key, Value: UnicodeString);
 begin
-  Result := ELAError.CheckKeyStatus(Thin_ExtendTrial(PWideChar(TrialExtensionKey)));
-  if lkFail = Result then
-    raise ELAFailException.CreateFmt('Failed to extend the trial using the ' +
-      'trial extension key %s', [TrialExtensionKey]);
+  if not ELAError.CheckOKFail(Thin_SetTrialActivationMetadata(PWideChar(Key), PWideChar(Value))) then
+    raise
+    ELAFailException.Create('Failed to set the trial activation metadata');
 end;
 
-function Thin_InitializeTrial(trialLength: LongWord): HRESULT; cdecl;
-  external LexActivator_DLL name 'InitializeTrial';
+function Thin_SetAppVersion(const appVersion: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetAppVersion';
 
-function InitializeTrial(TrialLength: LongWord): TLAKeyStatus;
+procedure SetAppVersion(const AppVersion: UnicodeString);
 begin
-  Result := ELAError.CheckKeyStatus(Thin_InitializeTrial(TrialLength));
-  if lkFail = Result then
-    raise ELAFailException.Create('Failed to either start the unverified ' +
-      'trial or verify the validity of trial');
+  if not ELAError.CheckOKFail(Thin_SetAppVersion(PWideChar(AppVersion))) then
+    raise
+    ELAFailException.CreateFmt('Failed to set the current app version of the ' +
+    'application to %s', [AppVersion]);
 end;
 
-function Thin_GetTrialDaysLeft(out daysLeft : LongWord; trialType: LongWord): HRESULT; cdecl;
-  external LexActivator_DLL name 'GetTrialDaysLeft';
-
-function GetTrialDaysLeft(TrialType: TLATrialType): LongWord;
-begin
-  if not ELAError.CheckOKFail(Thin_GetTrialDaysLeft(Result, LATrialTypeToLongWord[TrialType])) then
-    raise ELAFailException.Create('Failed to get the number of remaining trial days');
-end;
-
-function Thin_SetDayIntervalForServerCheck(dayInterval: LongWord): HRESULT; cdecl;
-  external LexActivator_DLL name 'SetDayIntervalForServerCheck';
-
-procedure SetDayIntervalForServerCheck(DayInterval: LongWord);
-begin
-  if not ELAError.CheckOKFail(Thin_SetDayIntervalForServerCheck(DayInterval)) then
-    raise ELAFailException.Create('Failed to set the interval for server checks');
-end;
-
-function Thin_SetGracePeriodForNetworkError(gracePeriod: LongWord): HRESULT; cdecl;
-  external LexActivator_DLL name 'SetGracePeriodForNetworkError';
-
-procedure SetGracePeriodForNetworkError(GracePeriod: LongWord);
-begin
-  if not ELAError.CheckOKFail(Thin_SetGracePeriodForNetworkError(GracePeriod)) then
-    raise ELAFailException.Create('Failed to set the grace period for failed ' +
-      're-validation requests');
-end;
-
-function Thin_SetNetworkProxy(const proxy: PWideChar): HRESULT; cdecl;
+function Thin_SetNetworkProxy(const proxy: PWideChar): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'SetNetworkProxy';
 
 procedure SetNetworkProxy(const Proxy: UnicodeString);
 begin
   if not ELAError.CheckOKFail(Thin_SetNetworkProxy(PWideChar(Proxy))) then
-    raise ELAFailException.Create('Failed to set the network proxy');
+    raise
+    ELAFailException.CreateFmt('Failed to set the network proxy to ' +
+    '%s', [Proxy]);
 end;
 
-function Thin_SetUserLock(userLock: Boolean): HRESULT; cdecl;
-  external LexActivator_DLL name 'SetUserLock';
+function Thin_GetProductMetadata(const key: PWideChar; out value; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetProductMetadata';
 
-procedure SetUserLock(UserLock: Boolean);
+function GetProductMetadata(const Key: UnicodeString): UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetProductMetadata(PWideChar(Key), Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetProductMetadata(PWideChar(Key), PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
 begin
-  if not ELAError.CheckOKFail(Thin_SetUserLock(UserLock)) then
-    raise ELAFailException.Create('Failed to set the user lock');
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.CreateFmt('Failed to get the product metadata with key %s', [Key]);
 end;
 
-function Thin_SetCryptlexHost(const host: PWideChar): HRESULT; cdecl;
-  external LexActivator_DLL name 'SetCryptlexHost';
+function Thin_GetLicenseMetadata(const key: UnicodeString; out value; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseMetadata';
 
-procedure SetCryptlexHost(const Host: UnicodeString);
+function GetLicenseMetadata(const Key: UnicodeString): UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseMetadata(PWideChar(Key), Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseMetadata(PWideChar(Key), PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
 begin
-  if not ELAError.CheckOKFail(Thin_SetCryptlexHost(PWideChar(Host))) then
-    raise ELAFailException.Create('Failed to set the host for server');
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.CreateFmt('Failed to get the license metadata with key %s', [Key]);
 end;
 
-class function ELAError.CreateByCode(ErrorCode: HRESULT): ELAError;
+function Thin_GetLicenseKey(out licenseKey; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseKey';
+
+function GetLicenseKey: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseKey(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseKey(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the license key used for activation');
+end;
+
+function Thin_GetLicenseExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseExpiryDate';
+
+function GetLicenseExpiryDate: TDateTime;
+var
+  ExpiryDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseExpiryDate(ExpiryDate)) then
+    raise
+    ELAFailException.Create('Failed to get the license expiry date timestamp');
+  Result := UnixToDateTime(ExpiryDate);  
+end;
+
+function Thin_GetLicenseUserEmail(out email; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseUserEmail';
+
+function GetLicenseUserEmail: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseUserEmail(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseUserEmail(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the email associated with license user');
+end;
+
+function Thin_GetLicenseUserName(out name; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseUserName';
+
+function GetLicenseUserName: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseUserName(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseUserName(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the name associated with license user');
+end;
+
+function Thin_GetActivationMetadata(const key: PWideChar; out value; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetActivationMetadata';
+
+function GetActivationMetadata(const Key: UnicodeString): UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetActivationMetadata(PWideChar(Key), Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetActivationMetadata(PWideChar(Key), PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.CreateFmt('Failed to get the activation metadata with key %s', [Key]);
+end;
+
+function Thin_GetTrialActivationMetadata(const key: PWideChar; out value; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetTrialActivationMetadata';
+
+function GetTrialActivationMetadata(const Key: UnicodeString): UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetTrialActivationMetadata(PWideChar(Key), Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetTrialActivationMetadata(PWideChar(Key), PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.CreateFmt('Failed to get the trial activation metadata with key %s', [Key]);
+end;
+
+function Thin_GetTrialExpiryDate(out trialExpiryDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetTrialExpiryDate';
+
+function GetTrialExpiryDate: TDateTime;
+var
+  TrialExpiryDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetTrialExpiryDate(TrialExpiryDate)) then
+    raise
+    ELAFailException.Create('Failed to get the trial expiry date timestamp');
+  Result := UnixToDateTime(TrialExpiryDate);
+end;
+
+function Thin_GetTrialId(out trialId; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetTrialId';
+
+function GetTrialId: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetTrialId(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetTrialId(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the trial activation id');
+end;
+
+function Thin_GetLocalTrialExpiryDate(out trialExpiryDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLocalTrialExpiryDate';
+
+function GetLocalTrialExpiryDate: TDateTime;
+var
+  TrialExpiryDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLocalTrialExpiryDate(TrialExpiryDate)) then
+    raise
+    ELAFailException.Create('Failed to get the trial expiry date timestamp');
+  Result := UnixToDateTime(TrialExpiryDate);
+end;
+
+function Thin_ActivateLicense: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'ActivateLicense';
+
+function ActivateLicense: TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_ActivateLicense);
+end;
+
+function Thin_ActivateLicenseOffline(const filePath: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'ActivateLicenseOffline';
+
+function ActivateLicenseOffline(const FilePath: UnicodeString): TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_ActivateLicenseOffline(PWideChar(FilePath)));
+end;
+
+function Thin_GenerateOfflineActivationRequest(const filePath: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GenerateOfflineActivationRequest';
+
+procedure GenerateOfflineActivationRequest(const FilePath: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_GenerateOfflineActivationRequest(PWideChar(FilePath))) then
+    raise
+    ELAFailException.Create('Failed to generate the offline activation request');
+end;
+
+function Thin_DeactivateLicense: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'DeactivateLicense';
+
+function DeactivateLicense: TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_DeactivateLicense);
+end;
+
+function Thin_GenerateOfflineDeactivationRequest(const filePath: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GenerateOfflineDeactivationRequest';
+
+procedure GenerateOfflineDeactivationRequest(const FilePath: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_GenerateOfflineDeactivationRequest(PWideChar(FilePath))) then
+    raise
+    ELAFailException.Create('Failed to generate the offline deactivation request');
+end;
+
+function Thin_IsLicenseGenuine: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'IsLicenseGenuine';
+
+function IsLicenseGenuine: TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_IsLicenseGenuine);
+end;
+
+function Thin_IsLicenseValid: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'IsLicenseValid';
+
+function IsLicenseValid: TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_IsLicenseValid);
+end;
+
+function Thin_ActivateTrial: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'ActivateTrial';
+
+function ActivateTrial: TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_ActivateTrial);
+end;
+
+function Thin_IsTrialGenuine: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'IsTrialGenuine';
+
+function IsTrialGenuine: TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_IsTrialGenuine);
+end;
+
+function Thin_ActivateLocalTrial(trialLength: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'ActivateLocalTrial';
+
+function ActivateLocalTrial(TrialLength: LongWord): TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_ActivateLocalTrial(TrialLength));
+end;
+
+function Thin_IsLocalTrialGenuine: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'IsLocalTrialGenuine';
+
+function IsLocalTrialGenuine: TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_IsLocalTrialGenuine);
+end;
+
+function Thin_ExtendLocalTrial(trialExtensionLength: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'ExtendLocalTrial';
+
+function ExtendLocalTrial(TrialExtensionLength: LongWord): TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_ExtendLocalTrial(TrialExtensionLength));
+end;
+
+function Thin_Reset: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'Reset';
+
+procedure LAReset;
+begin
+  if not ELAError.CheckOKFail(Thin_Reset) then
+    raise
+    ELAFailException.Create('Failed to reset the activation and trial data');
+end;
+
+class function ELAError.CreateByCode(ErrorCode: TLAStatusCode): ELAError;
 begin
   case ErrorCode of
     LA_OK: Result := nil;
     LA_FAIL: Result := ELAFailException.Create;
     LA_EXPIRED: Result := ELAExpiredError.Create;
-    LA_REVOKED: Result := ELARevokedError.Create;
-    LA_GP_OVER: Result := ELAGPOverError.Create;
-    LA_E_INET: Result := ELAInetException.Create;
-    LA_E_PKEY: Result := ELAPKeyException.Create;
-    LA_E_PFILE: Result := ELAPFileException.Create;
-    LA_E_FPATH: Result := ELAFPathException.Create;
-    LA_E_GUID: Result := ELAGUIDException.Create;
-    LA_E_OFILE: Result := ELAOFileException.Create;
-    LA_E_PERMISSION: Result := ELAPermissionException.Create;
-    LA_E_EDATA_LEN: Result := ELAEDataLenException.Create;
-    LA_E_TKEY: Result := ELATKeyException.Create;
-    LA_E_TIME: Result := ELATimeException.Create;
-    LA_E_VM: Result := ELAVMException.Create;
+    LA_SUSPENDED: Result := ELASuspendedError.Create;
+    LA_GRACE_PERIOD_OVER: Result := ELAGracePeriodOverError.Create;
+    LA_TRIAL_EXPIRED: Result := ELATrialExpiredError.Create;
+    LA_LOCAL_TRIAL_EXPIRED: Result := ELALocalTrialExpiredError.Create;
+    LA_E_FILE_PATH: Result := ELAFilePathException.Create;
+    LA_E_PRODUCT_FILE: Result := ELAProductFileException.Create;
+    LA_E_PRODUCT_DATA: Result := ELAProductDataException.Create;
+    LA_E_PRODUCT_ID: Result := ELAProductIdException.Create;
+    LA_E_SYSTEM_PERMISSION: Result := ELASystemPermissionException.Create;
+    LA_E_FILE_PERMISSION: Result := ELAFilePermissionException.Create;
     LA_E_WMIC: Result := ELAWMICException.Create;
-    LA_E_TEXT_KEY: Result := ELATExtKeyException.Create;
-    LA_E_TRIAL_LEN: Result := ELATrialLenException.Create;
-    LA_T_EXPIRED: Result := ELATExpiredError.Create;
-    LA_TEXT_EXPIRED: Result := ELATExtExpiredError.Create;
+    LA_E_TIME: Result := ELATimeException.Create;
+    LA_E_INET: Result := ELAInetException.Create;
+    LA_E_NET_PROXY: Result := ELANetProxyException.Create;
+    LA_E_HOST_URL: Result := ELAHostURLException.Create;
     LA_E_BUFFER_SIZE: Result := ELABufferSizeException.Create;
-	  LA_E_CUSTOM_FIELD_ID: Result := ELACustomFieldIdException.Create;
-    LA_E_NET_PROXY: Result := ELANetworkProxyException.Create;
-    LA_E_HOST_URL: Result := ELACryptlexHostException.Create;
-    LA_E_DEACT_LIMIT: Result := ELADeactLimitException.Create;
-    LA_E_ACT_LIMIT: Result := ELAActLimitException.Create;
-    
+    LA_E_APP_VERSION_LENGTH: Result := ELAAppVersionLengthException.Create;
+    LA_E_REVOKED: Result := ELARevokedException.Create;
+    LA_E_LICENSE_KEY: Result := ELALicenseKeyException.Create;
+    LA_E_LICENSE_TYPE: Result := ELALicenseTypeException.Create;
+    LA_E_OFFLINE_RESPONSE_FILE: Result := ELAOfflineResponseFileException.Create;
+    LA_E_OFFLINE_RESPONSE_FILE_EXPIRED: Result := ELAOfflineResponseFileExpiredException.Create;
+    LA_E_ACTIVATION_LIMIT: Result := ELAActivationLimitException.Create;
+    LA_E_ACTIVATION_NOT_FOUND: Result := ELAActivationNotFoundException.Create;
+    LA_E_DEACTIVATION_LIMIT: Result := ELADeactivationLimitException.Create;
+    LA_E_TRIAL_NOT_ALLOWED: Result := ELATrialNotAllowedException.Create;
+    LA_E_TRIAL_ACTIVATION_LIMIT: Result := ELATrialActivationLimitException.Create;
+    LA_E_MACHINE_FINGERPRINT: Result := ELAMachineFingerprintException.Create;
+    LA_E_METADATA_KEY_LENGTH: Result := ELAMetadataKeyLengthException.Create;
+    LA_E_METADATA_VALUE_LENGTH: Result := ELAMetadataValueLengthException.Create;
+    LA_E_ACTIVATION_METADATA_LIMIT: Result := ELAActivationMetadataLimitException.Create;
+    LA_E_TRIAL_ACTIVATION_METADATA_LIMIT: Result := ELATrialActivationMetadataLimitException.Create;
+    LA_E_METADATA_KEY_NOT_FOUND: Result := ELAMetadataKeyNotFoundException.Create;
+    LA_E_VM: Result := ELAVMException.Create;
+    LA_E_COUNTRY: Result := ELACountryException.Create;
+    LA_E_IP: Result := ELAIPException.Create;
+    LA_E_RATE_LIMIT: Result := ELARateLimitException.Create;
+    LA_E_SERVER: Result := ELAServerException.Create;
+    LA_E_CLIENT: Result := ELAClientException.Create;
+
   else
     Result := ELAUnknownErrorCodeException.Create(ErrorCode);
   end;
 end;
 
 // check for LA_OK, otherwise raise exception
-class procedure ELAError.Check(ErrorCode: HRESULT);
+class procedure ELAError.Check(ErrorCode: TLAStatusCode);
 begin
   // E2441 Inline function declared in interface section must not use local
   // symbol 'LA_OK'.
@@ -1508,7 +2337,7 @@ begin
     raise CreateByCode(ErrorCode);
 end;
 
-class function ELAError.CheckOKFail(ErrorCode: HRESULT): Boolean;
+class function ELAError.CheckOKFail(ErrorCode: TLAStatusCode): Boolean;
 begin
   // E2441 Inline function declared in interface section must not use local
   // symbol 'LA_OK'
@@ -1520,24 +2349,24 @@ begin
   end;
 end;
 
-class function ELAError.CheckKeyStatus(ErrorCode: HRESULT): TLAKeyStatus;
+class function ELAError.CheckKeyStatus(ErrorCode: TLAStatusCode): TLAKeyStatus;
 begin
   case ErrorCode of
     LA_OK: Result := lkOK;
     LA_EXPIRED: Result := lkExpired;
-    LA_REVOKED: Result := lkRevoked;
-    LA_GP_OVER: Result := lkGPOver;
-    LA_T_EXPIRED: Result := lkTExpired;
-    LA_TEXT_EXPIRED: Result := lkTExtExpired;
+    LA_SUSPENDED: Result := lkSuspended;
+    LA_GRACE_PERIOD_OVER: Result := lkGracePeriodOver;
+    LA_TRIAL_EXPIRED: Result := lkTrialExpired;
+    LA_LOCAL_TRIAL_EXPIRED: Result := lkLocalTrialExpired;
     LA_FAIL: Result := lkFail;
   else
     raise CreateByCode(ErrorCode);
   end;
 end;
 
-constructor ELAUnknownErrorCodeException.Create(AErrorCode: HRESULT);
+constructor ELAUnknownErrorCodeException.Create(AErrorCode: TLAStatusCode);
 begin
-  inherited CreateFmt('LexActivator error %.8x', [AErrorCode]);
+  inherited CreateFmt('LexActivator error %d', [AErrorCode]);
   FErrorCode := AErrorCode;
 end;
 
@@ -1554,6 +2383,7 @@ end;
 procedure ELAFailException.AfterConstruction;
 begin
   FErrorCode := LA_FAIL;
+  FKeyStatus := lkFail;
 end;
 
 class function ELAKeyStatusError.CreateByKeyStatus(KeyStatus: TLAKeyStatus): ELAError;
@@ -1561,10 +2391,10 @@ begin
   case KeyStatus of
     lkOK: Result := nil;
     lkExpired: Result := ELAExpiredError.Create;
-    lkRevoked: Result := ELARevokedError.Create;
-    lkGPOver: Result := ELAGPOverError.Create;
-    lkTExpired: Result := ELATExpiredError.Create;
-    lkTExtExpired: Result := ELATExtExpiredError.Create;
+    lkSuspended: Result := ELASuspendedError.Create;
+    lkGracePeriodOver: Result := ELAGracePeriodOverError.Create;
+    lkTrialExpired: Result := ELATrialExpiredError.Create;
+    lkLocalTrialExpired: Result := ELALocalTrialExpiredError.Create;
     lkFail: Result := ELAFailException.Create;
   else
     if (KeyStatus >= Low(TLAKeyStatus)) and (KeyStatus <= High(TLAKeyStatus)) then
@@ -1575,7 +2405,7 @@ begin
       ELAKeyStatusError(Result).FKeyStatus := KeyStatus;
     end else begin
       // invalid value, should not appear
-      Result := ELAKeyStatusError.CreateFmt('Key state is $%.8x',
+      Result := ELAKeyStatusError.CreateFmt('Key state is %d',
         [Integer(KeyStatus)]);
       ELAKeyStatusError(Result).FKeyStatus := KeyStatus;
     end;
@@ -1584,79 +2414,83 @@ end;
 
 constructor ELAExpiredError.Create;
 begin
-  inherited Create('The product key has expired or system time has been ' +
-    'tampered with. Ensure your date and time settings are correct');
+  inherited Create('The license has expired or system time has been tampered ' +
+    'with. Ensure your date and time settings are correct');
   FErrorCode := LA_EXPIRED;
   FKeyStatus := lkExpired;
 end;
 
-constructor ELARevokedError.Create;
+constructor ELASuspendedError.Create;
 begin
-  inherited Create('The product key has been revoked');
-  FErrorCode := LA_REVOKED;
-  FKeyStatus := lkRevoked;
+  inherited Create('The license has been suspended');
+  FErrorCode := LA_SUSPENDED;
+  FKeyStatus := lkSuspended;
 end;
 
-constructor ELAGPOverError.Create;
+constructor ELAGracePeriodOverError.Create;
 begin
-  inherited Create('The grace period is over');
-  FErrorCode := LA_GP_OVER;
-  FKeyStatus := lkGPOver;
+  inherited Create('The grace period for server sync is over');
+  FErrorCode := LA_GRACE_PERIOD_OVER;
+  FKeyStatus := lkGracePeriodOver;
 end;
 
-constructor ELAInetException.Create;
+constructor ELATrialExpiredError.Create;
 begin
-  inherited Create('Failed to connect to the server due to network error');
-  FErrorCode := LA_E_INET;
+  inherited Create('The trial has expired or system time has been tampered ' +
+    'with. Ensure your date and time settings are correct');
+  FErrorCode := LA_TRIAL_EXPIRED;
+  FKeyStatus := lkTrialExpired;
 end;
 
-constructor ELAPKeyException.Create;
+constructor ELALocalTrialExpiredError.Create;
 begin
-  inherited Create('Invalid product key');
-  FErrorCode := LA_E_PKEY;
+  inherited Create('The local trial has expired or system time has been tampered ' +
+    'with. Ensure your date and time settings are correct');
+  FErrorCode := LA_LOCAL_TRIAL_EXPIRED;
+  FKeyStatus := lkLocalTrialExpired;
 end;
 
-constructor ELAPFileException.Create;
+constructor ELAFilePathException.Create;
+begin
+  inherited Create('Invalid file path');
+  FErrorCode := LA_E_FILE_PATH;
+end;
+
+constructor ELAProductFileException.Create;
 begin
   inherited Create('Invalid or corrupted product file');
-  FErrorCode := LA_E_PFILE;
+  FErrorCode := LA_E_PRODUCT_FILE;
 end;
 
-constructor ELAFPathException.Create;
+constructor ELAProductDataException.Create;
 begin
-  inherited Create('Invalid product file path');
-  FErrorCode := LA_E_FPATH;
+  inherited Create('Invalid product data');
+  FErrorCode := LA_E_PRODUCT_DATA;
 end;
 
-constructor ELAGUIDException.Create;
+constructor ELAProductIdException.Create;
 begin
-  inherited Create('The version GUID doesn''t match that of the product file');
-  FErrorCode := LA_E_GUID;
+  inherited Create('The product id is incorrect');
+  FErrorCode := LA_E_PRODUCT_ID;
 end;
 
-constructor ELAOFileException.Create;
+constructor ELASystemPermissionException.Create;
 begin
-  inherited Create('Invalid offline activation response file');
-  FErrorCode := LA_E_OFILE;
+  inherited Create('Insufficent system permissions');
+  FErrorCode := LA_E_SYSTEM_PERMISSION;
 end;
 
-constructor ELAPermissionException.Create;
+constructor ELAFilePermissionException.Create;
 begin
-  inherited Create('Insufficent system permissions. Occurs when LA_SYSTEM ' +
-    'flag is used but application is not run with admin privileges');
-  FErrorCode := LA_E_PERMISSION;
+  inherited Create('No permission to write to file');
+  FErrorCode := LA_E_FILE_PERMISSION;
 end;
 
-constructor ELAEDataLenException.Create;
+constructor ELAWMICException.Create;
 begin
-  inherited Create('Extra activation data length is more than 256 characters');
-  FErrorCode := LA_E_EDATA_LEN;
-end;
-
-constructor ELATKeyException.Create;
-begin
-  inherited Create('The trial key doesn''t match that of the product file');
-  FErrorCode := LA_E_TKEY;
+  inherited Create('Fingerprint couldn''t be generated because Windows Management ' +
+    'Instrumentation (WMI) service has been disabled');
+  FErrorCode := LA_E_WMIC;
 end;
 
 constructor ELATimeException.Create;
@@ -1666,47 +2500,22 @@ begin
   FErrorCode := LA_E_TIME;
 end;
 
-constructor ELAVMException.Create;
+constructor ELAInetException.Create;
 begin
-  inherited Create('Application is being run inside a virtual machine / ' +
-    'hypervisor, and activation has been disallowed in the VM');
-  FErrorCode := LA_E_VM;
+  inherited Create('Failed to connect to the server due to network error');
+  FErrorCode := LA_E_INET;
 end;
 
-constructor ELAWMICException.Create;
+constructor ELANetProxyException.Create;
 begin
-  inherited Create('Fingerprint couldn''t be generated because Windows ' +
-    'Management Instrumentation (WMI) service has been disabled');
-  FErrorCode := LA_E_WMIC;
+  inherited Create('Invalid network proxy');
+  FErrorCode := LA_E_NET_PROXY;
 end;
 
-constructor ELATExtKeyException.Create;
+constructor ELAHostURLException.Create;
 begin
-  inherited Create('Invalid trial extension key');
-  FErrorCode := LA_E_TEXT_KEY;
-end;
-
-constructor ELATrialLenException.Create;
-begin
-  inherited Create('The trial length doesn''t match that of the product file');
-  FErrorCode := LA_E_TRIAL_LEN;
-end;
-
-constructor ELATExpiredError.Create;
-begin
-  inherited Create('The trial has expired or system time has been tampered ' +
-    'with. Ensure your date and time settings are correct');
-  FErrorCode := LA_T_EXPIRED;
-  FKeyStatus := lkTExpired;
-end;
-
-constructor ELATExtExpiredError.Create;
-begin
-  inherited Create('The trial extension key being used has already expired ' +
-    'or system time has been tampered with. Ensure your date and time ' +
-    'settings are correct');
-  FErrorCode := LA_TEXT_EXPIRED;
-  FKeyStatus := lkTExtExpired;
+  inherited Create('Invalid Cryptlex host url');
+  FErrorCode := LA_E_HOST_URL;
 end;
 
 constructor ELABufferSizeException.Create;
@@ -1715,34 +2524,150 @@ begin
   FErrorCode := LA_E_BUFFER_SIZE;
 end;
 
-constructor ELACustomFieldIdException.Create;
+constructor ELAAppVersionLengthException.Create;
 begin
-  inherited Create('Invalid custom field id');
-  FErrorCode := LA_E_CUSTOM_FIELD_ID;
+  inherited Create('App version length is more than 256 characters');
+  FErrorCode := LA_E_APP_VERSION_LENGTH;
 end;
 
-constructor ELANetworkProxyException.Create;
+constructor ELARevokedException.Create;
 begin
-  inherited Create('Invalid network proxy');
-  FErrorCode := LA_E_NET_PROXY;
+  inherited Create('The license has been revoked');
+  FErrorCode := LA_E_REVOKED;
 end;
 
-constructor ELACryptlexHostException.Create;
+constructor ELALicenseKeyException.Create;
 begin
-  inherited Create('Invalid Cryptlex host url');
-  FErrorCode := LA_E_HOST_URL;
+  inherited Create('Invalid license key');
+  FErrorCode := LA_E_LICENSE_KEY;
 end;
 
-constructor ELADeactLimitException.Create;
+constructor ELALicenseTypeException.Create;
 begin
-  inherited Create('Deactivation limit for key has reached');
-  FErrorCode := LA_E_DEACT_LIMIT;
+  inherited Create('Invalid license type. Make sure floating license ' +
+    'is not being used');
+  FErrorCode := LA_E_LICENSE_TYPE;
 end;
 
-constructor ELAActLimitException.Create;
+constructor ELAOfflineResponseFileException.Create;
 begin
-  inherited Create('Activation limit for key has reached');
-  FErrorCode := LA_E_ACT_LIMIT;
+  inherited Create('Invalid offline activation response file');
+  FErrorCode := LA_E_OFFLINE_RESPONSE_FILE;
 end;
 
+constructor ELAOfflineResponseFileExpiredException.Create;
+begin
+  inherited Create('The offline activation response has expired');
+  FErrorCode := LA_E_OFFLINE_RESPONSE_FILE_EXPIRED;
+end;
+
+constructor ELAActivationLimitException.Create;
+begin
+  inherited Create('The license has reached its allowed activations limit');
+  FErrorCode := LA_E_ACTIVATION_LIMIT;
+end;
+
+constructor ELAActivationNotFoundException.Create;
+begin
+  inherited Create('The license activation was deleted on the server');
+  FErrorCode := LA_E_ACTIVATION_NOT_FOUND;
+end;
+
+constructor ELADeactivationLimitException.Create;
+begin
+  inherited Create('The license has reached its allowed deactivations limit');
+  FErrorCode := LA_E_DEACTIVATION_LIMIT;
+end;
+
+constructor ELATrialNotAllowedException.Create;
+begin
+  inherited Create('Trial not allowed for the product');
+  FErrorCode := LA_E_TRIAL_NOT_ALLOWED;
+end;
+
+constructor ELATrialActivationLimitException.Create;
+begin
+  inherited Create('Your account has reached its trial activations limit');
+  FErrorCode := LA_E_TRIAL_ACTIVATION_LIMIT;
+end;
+
+constructor ELAMachineFingerprintException.Create;
+begin
+  inherited Create('Machine fingerprint has changed since activation');
+  FErrorCode := LA_E_MACHINE_FINGERPRINT;
+end;
+
+constructor ELAMetadataKeyLengthException.Create;
+begin
+  inherited Create('Metadata key length is more than 256 characters');
+  FErrorCode := LA_E_METADATA_KEY_LENGTH;
+end;
+
+constructor ELAMetadataValueLengthException.Create;
+begin
+  inherited Create('Metadata value length is more than 256 characters');
+  FErrorCode := LA_E_METADATA_VALUE_LENGTH;
+end;
+
+constructor ELAActivationMetadataLimitException.Create;
+begin
+  inherited Create('The license has reached its metadata fields limit');
+  FErrorCode := LA_E_ACTIVATION_METADATA_LIMIT;
+end;
+
+constructor ELATrialActivationMetadataLimitException.Create;
+begin
+  inherited Create('The trial has reached its metadata fields limit');
+  FErrorCode := LA_E_TRIAL_ACTIVATION_METADATA_LIMIT;
+end;
+
+constructor ELAMetadataKeyNotFoundException.Create;
+begin
+  inherited Create('The metadata key does not exist');
+  FErrorCode := LA_E_METADATA_KEY_NOT_FOUND;
+end;
+
+constructor ELAVMException.Create;
+begin
+  inherited Create('Application is being run inside a virtual machine / hypervisor, ' +
+    'and activation has been disallowed in the VM');
+  FErrorCode := LA_E_VM;
+end;
+
+constructor ELACountryException.Create;
+begin
+  inherited Create('Country is not allowed');
+  FErrorCode := LA_E_COUNTRY;
+end;
+
+constructor ELAIPException.Create;
+begin
+  inherited Create('IP address is not allowed');
+  FErrorCode := LA_E_IP;
+end;
+
+constructor ELARateLimitException.Create;
+begin
+  inherited Create('Rate limit for API has reached, try again later');
+  FErrorCode := LA_E_RATE_LIMIT;
+end;
+
+constructor ELAServerException.Create;
+begin
+  inherited Create('Server error');
+  FErrorCode := LA_E_SERVER;
+end;
+
+constructor ELAClientException.Create;
+begin
+  inherited Create('Client error');
+  FErrorCode := LA_E_CLIENT;
+end;
+
+initialization
+  InitializeCriticalSection(LALicenseCallbackMutex);
+finalization
+  try ResetLicenseCallback; except end;
+  DeleteCriticalSection(LALicenseCallbackMutex);
 end.
+

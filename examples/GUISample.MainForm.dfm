@@ -11,15 +11,16 @@ object GUISampleForm: TGUISampleForm
   Font.Name = 'Tahoma'
   Font.Style = []
   OldCreateOrder = False
+  OnDestroy = FormDestroy
   OnShow = FormShow
   PixelsPerInch = 96
   TextHeight = 13
   object lblProductKey: TLabel
     Left = 24
     Top = 32
-    Width = 61
+    Width = 59
     Height = 13
-    Caption = 'Product key:'
+    Caption = 'License key:'
   end
   object lblExtraData: TLabel
     Left = 24
@@ -28,17 +29,18 @@ object GUISampleForm: TGUISampleForm
     Height = 13
     Caption = 'Extra Data:'
   end
-  object edtProductKey: TEdit
+  object edtLicenseKey: TEdit
     Left = 96
     Top = 24
     Width = 361
     Height = 21
     TabOrder = 0
+    Text = 'FFF10F-8EAA50-4852AC-F7C0D1-B0C0C5-68EAFD'
   end
   object statStatusBar: TStatusBar
     Left = 0
-    Top = 157
-    Width = 601
+    Top = 153
+    Width = 593
     Height = 19
     Panels = <
       item
