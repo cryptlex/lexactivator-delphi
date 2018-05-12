@@ -1603,7 +1603,7 @@ var
   LAProcedureCallback: TLAProcedureCallback;
   LAMethodCallback: TLAMethodCallback;
   {$IFDEF DELPHI_HAS_CLOSURES}
-  LAClosure: TLAClosureCallback;
+  LAClosureCallback: TLAClosureCallback;
   {$ENDIF}
   LALicenseCallbackSynchronized: Boolean;
   LAStatusCode: TLAStatusCode;
@@ -1644,9 +1644,8 @@ var
 
 begin
   try
+    EnterCriticalSection(LALicenseCallbackMutex);
     try
-      EnterCriticalSection(LALicenseCallbackMutex);
-
       case LALicenseCallbackKind of
         lckNone: Exit;
         lckProcedure: if not Assigned(LAProcedureCallback) then Exit;
@@ -1696,9 +1695,8 @@ end;
 procedure LAThin_CallbackProxy(StatusCode: LongWord); cdecl;
 begin
   try
+    EnterCriticalSection(LALicenseCallbackMutex);
     try
-      EnterCriticalSection(LALicenseCallbackMutex);
-
       case LALicenseCallbackKind of
         lckNone: Exit;
         lckProcedure: if not Assigned(LAProcedureCallback) then Exit;
@@ -1735,9 +1733,8 @@ end;
 
 procedure SetLicenseCallback(Callback: TLAProcedureCallback; Synchronized: Boolean);
 begin
+  EnterCriticalSection(LALicenseCallbackMutex);
   try
-    EnterCriticalSection(LALicenseCallbackMutex);
-
     LAProcedureCallback := Callback;
     LALicenseCallbackSynchronized := Synchronized;
     LALicenseCallbackKind := lckProcedure;
@@ -1752,9 +1749,8 @@ end;
 
 procedure SetLicenseCallback(Callback: TLAMethodCallback; Synchronized: Boolean);
 begin
+  EnterCriticalSection(LALicenseCallbackMutex);
   try
-    EnterCriticalSection(LALicenseCallbackMutex);
-
     LAMethodCallback := Callback;
     LALicenseCallbackSynchronized := Synchronized;
     LALicenseCallbackKind := lckMethod;
@@ -1770,9 +1766,8 @@ end;
 {$IFDEF DELPHI_HAS_CLOSURES}
 procedure SetLicenseCallback(Callback: TLAClosureCallback; Synchronized: Boolean);
 begin
+  EnterCriticalSection(LALicenseCallbackMutex);
   try
-    EnterCriticalSection(LALicenseCallbackMutex);
-
     LAClosureCallback := Callback;
     LALicenseCallbackSynchronized := Synchronized;
     LALicenseCallbackKind := lckClosure;
@@ -1793,9 +1788,8 @@ end;
 
 procedure ResetLicenseCallback;
 begin
+  EnterCriticalSection(LALicenseCallbackMutex);
   try
-    EnterCriticalSection(LALicenseCallbackMutex);
-
     LALicenseCallbackKind := lckNone;
 
     if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackDummy)) then
