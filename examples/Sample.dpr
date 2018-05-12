@@ -28,44 +28,17 @@ begin
 end;
 
 const
-  PASTE_CONTENT_OF_PRODUCT_DAT_FILE: UnicodeString =
-    'PASTE_CONTENT_OF_PRODUCT_DAT_FILE';
-  PASTE_PRODUCT_ID: UnicodeString = 'PASTE_PRODUCT_ID';
-  PASTE_LICENCE_KEY: UnicodeString = 'PASTE_LICENCE_KEY';
-
-(*
-procedure ReadSampleData;
-var
-  Source: Text;
-begin
-  Assign(Source, 'product.dat.txt');
-  try
-    Reset(Source);
-    ReadLn(Source, PASTE_CONTENT_OF_PRODUCT_DAT_FILE);
-  finally
-    Close(Source);
-  end;
-  Assign(Source, 'data.txt');
-  try
-    Reset(Source);
-    ReadLn(Source, PASTE_LICENCE_KEY);
-    ReadLn(Source, PASTE_PRODUCT_ID);
-  finally
-    Close(Source);
-  end;
-
-  PASTE_LICENCE_KEY := Copy(PASTE_LICENCE_KEY, Pos(': ', PASTE_LICENCE_KEY) + 2, Length(PASTE_LICENCE_KEY) - Pos(': ', PASTE_LICENCE_KEY) - 1);
-  PASTE_PRODUCT_ID := Copy(PASTE_PRODUCT_ID, Pos(': ', PASTE_PRODUCT_ID) + 2, Length(PASTE_PRODUCT_ID) - Pos(': ', PASTE_PRODUCT_ID) - 1);
-end;
-*)
+  ProductData: UnicodeString = 'PASTE_CONTENT_OF_PRODUCT_DAT_FILE';
+  ProductId: UnicodeString = 'PASTE_PRODUCT_ID';
+  LicenseKey: UnicodeString = 'PASTE_LICENCE_KEY';
 
 procedure Init;
 var
   Step: string;
 begin
   try
-    Step := 'SetProductData'; SetProductData(PASTE_CONTENT_OF_PRODUCT_DAT_FILE);
-    Step := 'SetProductId'; SetProductId(PASTE_PRODUCT_ID, lfUser);
+    Step := 'SetProductData'; SetProductData(ProductData);
+    Step := 'SetProductId'; SetProductId(ProductId, lfUser);
     Step := 'SetAppVersion'; SetAppVersion('PASTE_YOUR_APP_VERION');
   except
     on E: Exception do
@@ -84,7 +57,7 @@ var
   Status: TLAKeyStatus;
 begin
   try
-    Step := 'SetLicenseKey'; SetLicenseKey(PASTE_LICENCE_KEY);
+    Step := 'SetLicenseKey'; SetLicenseKey(LicenseKey);
     Step := 'SetActivationMetadata'; SetActivationMetadata('key1', 'value1');
     Step := 'ActivateLicense'; Status := ActivateLicense;
     case Status of
