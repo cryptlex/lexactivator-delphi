@@ -1,5 +1,5 @@
 # lexactivator-delphi
-LexActivator API wrapper for Delphi
+LexActivator - Delphi licensing library
 
 Refer to following for documentation:
 
