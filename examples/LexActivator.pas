@@ -845,8 +845,8 @@ type
     (*
         CODE: LA_E_TIME
 
-        MESSAGE: The system time has been tampered with. Ensure your date
-        and time settings are correct.
+        MESSAGE: The difference between the network time and the system time is
+        more than allowed clock offset.
     *)
 
   ELATimeException = class(ELAException)
@@ -1087,6 +1087,17 @@ type
   end;
 
     (*
+        CODE: LA_E_TIME_MODIFIED
+
+        MESSAGE: The system time has been tampered (backdated).
+    *)
+
+  ELATimeModifiedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
         CODE: LA_E_VM
 
         MESSAGE: Application is being run inside a virtual machine / hypervisor,
@@ -1318,8 +1329,8 @@ const
     (*
         CODE: LA_E_TIME
 
-        MESSAGE: The system time has been tampered with. Ensure your date
-        and time settings are correct.
+        MESSAGE: The difference between the network time and the system time is
+        more than allowed clock offset.
     *)
 
   LA_E_TIME = TLAStatusCode(47);
@@ -1492,6 +1503,14 @@ const
     *)
 
   LA_E_METADATA_KEY_NOT_FOUND = TLAStatusCode(68);
+
+    (*
+        CODE: LA_E_TIME_MODIFIED
+
+        MESSAGE: The system time has been tampered (backdated).
+    *)
+
+  LA_E_TIME_MODIFIED = TLAStatusCode(69);
 
     (*
         CODE: LA_E_VM
@@ -2310,6 +2329,7 @@ begin
     LA_E_ACTIVATION_METADATA_LIMIT: Result := ELAActivationMetadataLimitException.Create;
     LA_E_TRIAL_ACTIVATION_METADATA_LIMIT: Result := ELATrialActivationMetadataLimitException.Create;
     LA_E_METADATA_KEY_NOT_FOUND: Result := ELAMetadataKeyNotFoundException.Create;
+    LA_E_TIME_MODIFIED: Result := ELATimeModifiedException.Create;
     LA_E_VM: Result := ELAVMException.Create;
     LA_E_COUNTRY: Result := ELACountryException.Create;
     LA_E_IP: Result := ELAIPException.Create;
@@ -2489,8 +2509,8 @@ end;
 
 constructor ELATimeException.Create;
 begin
-  inherited Create('The system time has been tampered with. Ensure your date ' +
-    'and time settings are correct');
+  inherited Create('The difference between the network time and the system time is ' +
+    'more than allowed clock offset.');
   FErrorCode := LA_E_TIME;
 end;
 
@@ -2619,6 +2639,12 @@ constructor ELAMetadataKeyNotFoundException.Create;
 begin
   inherited Create('The metadata key does not exist');
   FErrorCode := LA_E_METADATA_KEY_NOT_FOUND;
+end;
+
+constructor ELATimeModifiedException.Create;
+begin
+  inherited Create('The system time has been tampered (backdated)');
+  FErrorCode := LA_E_TIME_MODIFIED;
 end;
 
 constructor ELAVMException.Create;
