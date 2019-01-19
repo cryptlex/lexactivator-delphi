@@ -307,7 +307,7 @@ function GetLicenseKey: UnicodeString;
     RESULT: License expiry date timestamp
 
     EXCEPTIONS: ELAFailException, ELAProductIdException,
-    ELATimeException
+    ELATimeException, ELATimeModifiedException
 *)
 
 function GetLicenseExpiryDate: TDateTime;
@@ -320,7 +320,7 @@ function GetLicenseExpiryDate: TDateTime;
     RESULT: Email associated with license user
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
-    ELABufferSizeException
+    ELATimeModifiedException, ELABufferSizeException
 *)
 
 function GetLicenseUserEmail: UnicodeString;
@@ -333,10 +333,23 @@ function GetLicenseUserEmail: UnicodeString;
     RESULT: Name associated with license user
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
-    ELABufferSizeException
+    ELATimeModifiedException, ELABufferSizeException
 *)
 
 function GetLicenseUserName: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseType()
+
+    PURPOSE: Gets the license type (node-locked or hosted-floating).
+
+    RESULT: License type
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetLicenseType: UnicodeString;
 
 (*
     FUNCTION: GetActivationMetadata()
@@ -377,7 +390,8 @@ function GetTrialActivationMetadata(const Key: UnicodeString): UnicodeString;
 
     RESULT: Trial expiry date timestamp
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
 *)
 
 function GetTrialExpiryDate: TDateTime;
@@ -390,7 +404,7 @@ function GetTrialExpiryDate: TDateTime;
     RESULT: Trial activation id
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
-    ELABufferSizeException
+    ELATimeModifiedException, ELABufferSizeException
 *)
 
 function GetTrialId: UnicodeString;
@@ -402,7 +416,8 @@ function GetTrialId: UnicodeString;
 
     RESULT: Trial expiry date timestamp
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELATimeModifiedException
 *)
 
 function GetLocalTrialExpiryDate: TDateTime;
@@ -417,9 +432,9 @@ function GetLocalTrialExpiryDate: TDateTime;
     This function should be executed at the time of registration, ideally on
     a button click.
 
-    RETURN CODES: lkOK, LkExpired, lkSuspended, lkRevoked
+    RETURN CODES: lkOK, LkExpired, lkSuspended, lkRevoked, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELAInetException,
+    EXCEPTIONS: ELAProductIdException, ELAInetException,
     ELAVMException, ELATimeException, ELAActivationLimitException,
     ELAServerException, ELAClientException, ELALicenseTypeException,
     ELACountryException, ELAIPException, ELARateLimitException,
@@ -436,9 +451,9 @@ function ActivateLicense: TLAKeyStatus;
     PARAMETERS:
     * FilePath - path of the offline activation response file.
 
-    RETURN CODES: lkOK, lkExpired
+    RETURN CODES: lkOK, lkExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
     ELAOfflineResponseFileException, ELAVMException, ELATimeException,
     ELAFilePathException, ELAOfflineResponseFileExpiredException
 *)
@@ -473,7 +488,7 @@ procedure GenerateOfflineActivationRequest(const FilePath: UnicodeString);
 
     EXCEPTIONS: ELADeactivationLimitException, ELAProductIdException,
     ELATimeException, ELALicenseKeyException, ELAInetException,
-    ELAServerException, ELARateLimitException
+    ELAServerException, ELARateLimitException, ELATimeModifiedException
 *)
 
 function DeactivateLicense: TLAKeyStatus;
@@ -491,7 +506,7 @@ function DeactivateLicense: TLAKeyStatus;
     * FilePath - path of the file for the offline request.
 
     EXCEPTION: ELAFailException, ELAProductIdException, ELALicenseKeyException,
-    ELAFilePermissionException, ELATimeException
+    ELAFilePermissionException, ELATimeException, ELATimeModifiedException
 *)
 
 procedure GenerateOfflineDeactivationRequest(const FilePath: UnicodeString);
@@ -512,10 +527,10 @@ procedure GenerateOfflineDeactivationRequest(const FilePath: UnicodeString);
     This function must be called on every start of your program to verify the activation
     of your app.
 
-    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver
+    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
-    ELATimeException
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
+    ELATimeException, ELATimeModifiedException
 
     NOTE: If application was activated offline using ActivateLicenseOffline() function, you
     may want to set grace period to 0 to ignore grace period.
@@ -533,9 +548,9 @@ function IsLicenseGenuine: TLAKeyStatus;
     This is just an auxiliary function which you may use in some specific cases, when you
     want to skip the server sync.
 
-    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver
+    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
     ELATimeException
 
     NOTE: You may want to set grace period to 0 to ignore grace period.
@@ -552,14 +567,46 @@ function IsLicenseValid: TLAKeyStatus;
     This function should be executed when your application starts first time on
     the user's computer, ideally on a button click.
 
-    RETURN CODES: lkOK, lkTrialExpired
+    RETURN CODES: lkOK, lkTrialExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELAInetException,
+    EXCEPTIONS: ELAProductIdException, ELAInetException,
     ELAVMException, ELATimeException, ELAServerException, ELAClientException,
     ELACountryException, ELAIPException, ELARateLimitException
 *)
 
 function ActivateTrial: TLAKeyStatus;
+
+(*
+    FUNCTION: ActivateTrialOffline()
+
+    PURPOSE: Activates your trial using the offline activation response file.
+
+    PARAMETERS:
+    * FilePath - path of the offline activation response file.
+
+    RETURN CODES: lkOK, lkTrialExpired, lkFail
+
+    EXCEPTIONS: ELAProductIdException,
+    ELAOfflineResponseFileException, ELAVMException, ELATimeException,
+    ELAFilePathException, ELAOfflineResponseFileExpiredException
+*)
+
+function ActivateTrialOffline(const FilePath: UnicodeString): TLAKeyStatus;
+
+(*
+    PROCEDURE: GenerateOfflineTrialActivationRequest()
+
+    PURPOSE: Generates the offline trial activation request needed for generating
+    offline trial activation response in the dashboard.
+
+    PARAMETERS:
+    * FilePath - path of the file for the offline request.
+
+    RETURN CODES: ELAFailException, ELAProductIdException,
+    ELAFilePermissionException
+*)
+
+procedure GenerateOfflineTrialActivationRequest(const FilePath: UnicodeString);
 
 (*
     FUNCTION: IsTrialGenuine()
@@ -570,9 +617,10 @@ function ActivateTrial: TLAKeyStatus;
 
     This function must be called on every start of your program during the trial period.
 
-    RETURN CODES: lkOK, lkTrialExpired
+    RETURN CODES: lkOK, lkTrialExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELATimeException, ELAProductIdException
+    EXCEPTIONS: ELATimeException, ELAProductIdException,
+    ELATimeModifiedException
 
 *)
 
@@ -589,9 +637,10 @@ function IsTrialGenuine: TLAKeyStatus;
     PARAMETERS:
     * TrialLength - trial length in days
 
-    RETURN CODES: lkOK, lkLocalTrialExpired
+    RETURN CODES: lkOK, lkLocalTrialExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAProductIdException,
+    ELATimeModifiedException
 
     NOTE: The function is only meant for local(unverified) trials.
 *)
@@ -606,9 +655,10 @@ function ActivateLocalTrial(TrialLength: LongWord): TLAKeyStatus;
 
     This function must be called on every start of your program during the trial period.
 
-    RETURN CODES: lkOK, lkLocalTrialExpired
+    RETURN CODES: lkOK, lkLocalTrialExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAProductIdException,
+    ELATimeModifiedException
 
     NOTE: The function is only meant for local(unverified) trials.
 *)
@@ -623,9 +673,10 @@ function IsLocalTrialGenuine: TLAKeyStatus;
     PARAMETERS:
     * TrialExtensionLength - number of days to extend the trial
 
-    RETURN CODES: lkOK
+    RETURN CODES: lkOK, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAProductIdException,
+    ELATimeModifiedException
 
     NOTE: The function is only meant for local(unverified) trials.
 *)
@@ -650,7 +701,7 @@ procedure LAReset;
 
 type
   TLAStatusCode = type Integer;
-  
+
   {$M+}
   ELAError = class(Exception) // parent of all LexActivator exceptions
   protected
@@ -845,8 +896,8 @@ type
     (*
         CODE: LA_E_TIME
 
-        MESSAGE: The system time has been tampered with. Ensure your date
-        and time settings are correct.
+        MESSAGE: The difference between the network time and the system time is
+        more than allowed clock offset.
     *)
 
   ELATimeException = class(ELAException)
@@ -1087,6 +1138,17 @@ type
   end;
 
     (*
+        CODE: LA_E_TIME_MODIFIED
+
+        MESSAGE: The system time has been tampered (backdated).
+    *)
+
+  ELATimeModifiedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
         CODE: LA_E_VM
 
         MESSAGE: Application is being run inside a virtual machine / hypervisor,
@@ -1318,8 +1380,8 @@ const
     (*
         CODE: LA_E_TIME
 
-        MESSAGE: The system time has been tampered with. Ensure your date
-        and time settings are correct.
+        MESSAGE: The difference between the network time and the system time is
+        more than allowed clock offset.
     *)
 
   LA_E_TIME = TLAStatusCode(47);
@@ -1492,6 +1554,14 @@ const
     *)
 
   LA_E_METADATA_KEY_NOT_FOUND = TLAStatusCode(68);
+
+    (*
+        CODE: LA_E_TIME_MODIFIED
+
+        MESSAGE: The system time has been tampered (backdated).
+    *)
+
+  LA_E_TIME_MODIFIED = TLAStatusCode(69);
 
     (*
         CODE: LA_E_VM
@@ -2030,6 +2100,41 @@ begin
     raise ELAFailException.Create('Failed to get the name associated with license user');
 end;
 
+function Thin_GetLicenseType(out name; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseType';
+
+function GetLicenseType: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseType(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseType(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the license type');
+end;
+
 function Thin_GetActivationMetadata(const key: PWideChar; out value; length: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetActivationMetadata';
 
@@ -2229,6 +2334,24 @@ begin
   Result := ELAError.CheckKeyStatus(Thin_ActivateTrial);
 end;
 
+function Thin_ActivateTrialOffline(const filePath: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'ActivateTrialOffline';
+
+function ActivateTrialOffline(const FilePath: UnicodeString): TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_ActivateTrialOffline(PWideChar(FilePath)));
+end;
+
+function Thin_GenerateOfflineTrialActivationRequest(const filePath: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GenerateOfflineTrialActivationRequest';
+
+procedure GenerateOfflineTrialActivationRequest(const FilePath: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_GenerateOfflineTrialActivationRequest(PWideChar(FilePath))) then
+    raise
+    ELAFailException.Create('Failed to generate the offline trial activation request');
+end;
+
 function Thin_IsTrialGenuine: TLAStatusCode; cdecl;
   external LexActivator_DLL name 'IsTrialGenuine';
 
@@ -2310,6 +2433,7 @@ begin
     LA_E_ACTIVATION_METADATA_LIMIT: Result := ELAActivationMetadataLimitException.Create;
     LA_E_TRIAL_ACTIVATION_METADATA_LIMIT: Result := ELATrialActivationMetadataLimitException.Create;
     LA_E_METADATA_KEY_NOT_FOUND: Result := ELAMetadataKeyNotFoundException.Create;
+    LA_E_TIME_MODIFIED: Result := ELATimeModifiedException.Create;
     LA_E_VM: Result := ELAVMException.Create;
     LA_E_COUNTRY: Result := ELACountryException.Create;
     LA_E_IP: Result := ELAIPException.Create;
@@ -2489,8 +2613,8 @@ end;
 
 constructor ELATimeException.Create;
 begin
-  inherited Create('The system time has been tampered with. Ensure your date ' +
-    'and time settings are correct');
+  inherited Create('The difference between the network time and the system time is ' +
+    'more than allowed clock offset.');
   FErrorCode := LA_E_TIME;
 end;
 
@@ -2619,6 +2743,12 @@ constructor ELAMetadataKeyNotFoundException.Create;
 begin
   inherited Create('The metadata key does not exist');
   FErrorCode := LA_E_METADATA_KEY_NOT_FOUND;
+end;
+
+constructor ELATimeModifiedException.Create;
+begin
+  inherited Create('The system time has been tampered (backdated)');
+  FErrorCode := LA_E_TIME_MODIFIED;
 end;
 
 constructor ELAVMException.Create;
