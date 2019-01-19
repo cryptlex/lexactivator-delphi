@@ -307,7 +307,7 @@ function GetLicenseKey: UnicodeString;
     RESULT: License expiry date timestamp
 
     EXCEPTIONS: ELAFailException, ELAProductIdException,
-    ELATimeException
+    ELATimeException, ELATimeModifiedException
 *)
 
 function GetLicenseExpiryDate: TDateTime;
@@ -320,7 +320,7 @@ function GetLicenseExpiryDate: TDateTime;
     RESULT: Email associated with license user
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
-    ELABufferSizeException
+    ELATimeModifiedException, ELABufferSizeException
 *)
 
 function GetLicenseUserEmail: UnicodeString;
@@ -333,7 +333,7 @@ function GetLicenseUserEmail: UnicodeString;
     RESULT: Name associated with license user
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
-    ELABufferSizeException
+    ELATimeModifiedException, ELABufferSizeException
 *)
 
 function GetLicenseUserName: UnicodeString;
@@ -377,7 +377,8 @@ function GetTrialActivationMetadata(const Key: UnicodeString): UnicodeString;
 
     RESULT: Trial expiry date timestamp
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
 *)
 
 function GetTrialExpiryDate: TDateTime;
@@ -390,7 +391,7 @@ function GetTrialExpiryDate: TDateTime;
     RESULT: Trial activation id
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
-    ELABufferSizeException
+    ELATimeModifiedException, ELABufferSizeException
 *)
 
 function GetTrialId: UnicodeString;
@@ -402,7 +403,8 @@ function GetTrialId: UnicodeString;
 
     RESULT: Trial expiry date timestamp
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELATimeModifiedException
 *)
 
 function GetLocalTrialExpiryDate: TDateTime;
@@ -473,7 +475,7 @@ procedure GenerateOfflineActivationRequest(const FilePath: UnicodeString);
 
     EXCEPTIONS: ELADeactivationLimitException, ELAProductIdException,
     ELATimeException, ELALicenseKeyException, ELAInetException,
-    ELAServerException, ELARateLimitException
+    ELAServerException, ELARateLimitException, ELATimeModifiedException
 *)
 
 function DeactivateLicense: TLAKeyStatus;
@@ -491,7 +493,7 @@ function DeactivateLicense: TLAKeyStatus;
     * FilePath - path of the file for the offline request.
 
     EXCEPTION: ELAFailException, ELAProductIdException, ELALicenseKeyException,
-    ELAFilePermissionException, ELATimeException
+    ELAFilePermissionException, ELATimeException, ELATimeModifiedException
 *)
 
 procedure GenerateOfflineDeactivationRequest(const FilePath: UnicodeString);
@@ -515,7 +517,7 @@ procedure GenerateOfflineDeactivationRequest(const FilePath: UnicodeString);
     RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
-    ELATimeException
+    ELATimeException, ELATimeModifiedException
 
     NOTE: If application was activated offline using ActivateLicenseOffline() function, you
     may want to set grace period to 0 to ignore grace period.
@@ -572,7 +574,8 @@ function ActivateTrial: TLAKeyStatus;
 
     RETURN CODES: lkOK, lkTrialExpired
 
-    EXCEPTIONS: ELAFailException, ELATimeException, ELAProductIdException
+    EXCEPTIONS: ELAFailException, ELATimeException, ELAProductIdException,
+    ELATimeModifiedException
 
 *)
 
@@ -591,7 +594,8 @@ function IsTrialGenuine: TLAKeyStatus;
 
     RETURN CODES: lkOK, lkLocalTrialExpired
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELATimeModifiedException
 
     NOTE: The function is only meant for local(unverified) trials.
 *)
@@ -608,7 +612,8 @@ function ActivateLocalTrial(TrialLength: LongWord): TLAKeyStatus;
 
     RETURN CODES: lkOK, lkLocalTrialExpired
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELATimeModifiedException
 
     NOTE: The function is only meant for local(unverified) trials.
 *)
@@ -625,7 +630,8 @@ function IsLocalTrialGenuine: TLAKeyStatus;
 
     RETURN CODES: lkOK
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELATimeModifiedException
 
     NOTE: The function is only meant for local(unverified) trials.
 *)
