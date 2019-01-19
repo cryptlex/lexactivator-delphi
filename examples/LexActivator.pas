@@ -432,9 +432,9 @@ function GetLocalTrialExpiryDate: TDateTime;
     This function should be executed at the time of registration, ideally on
     a button click.
 
-    RETURN CODES: lkOK, LkExpired, lkSuspended, lkRevoked
+    RETURN CODES: lkOK, LkExpired, lkSuspended, lkRevoked, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELAInetException,
+    EXCEPTIONS: ELAProductIdException, ELAInetException,
     ELAVMException, ELATimeException, ELAActivationLimitException,
     ELAServerException, ELAClientException, ELALicenseTypeException,
     ELACountryException, ELAIPException, ELARateLimitException,
@@ -451,9 +451,9 @@ function ActivateLicense: TLAKeyStatus;
     PARAMETERS:
     * FilePath - path of the offline activation response file.
 
-    RETURN CODES: lkOK, lkExpired
+    RETURN CODES: lkOK, lkExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
     ELAOfflineResponseFileException, ELAVMException, ELATimeException,
     ELAFilePathException, ELAOfflineResponseFileExpiredException
 *)
@@ -527,9 +527,9 @@ procedure GenerateOfflineDeactivationRequest(const FilePath: UnicodeString);
     This function must be called on every start of your program to verify the activation
     of your app.
 
-    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver
+    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
     ELATimeException, ELATimeModifiedException
 
     NOTE: If application was activated offline using ActivateLicenseOffline() function, you
@@ -548,9 +548,9 @@ function IsLicenseGenuine: TLAKeyStatus;
     This is just an auxiliary function which you may use in some specific cases, when you
     want to skip the server sync.
 
-    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver
+    RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
     ELATimeException
 
     NOTE: You may want to set grace period to 0 to ignore grace period.
@@ -567,9 +567,9 @@ function IsLicenseValid: TLAKeyStatus;
     This function should be executed when your application starts first time on
     the user's computer, ideally on a button click.
 
-    RETURN CODES: lkOK, lkTrialExpired
+    RETURN CODES: lkOK, lkTrialExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELAInetException,
+    EXCEPTIONS: ELAProductIdException, ELAInetException,
     ELAVMException, ELATimeException, ELAServerException, ELAClientException,
     ELACountryException, ELAIPException, ELARateLimitException
 *)
@@ -617,9 +617,9 @@ procedure GenerateOfflineTrialActivationRequest(const FilePath: UnicodeString);
 
     This function must be called on every start of your program during the trial period.
 
-    RETURN CODES: lkOK, lkTrialExpired
+    RETURN CODES: lkOK, lkTrialExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELATimeException, ELAProductIdException,
+    EXCEPTIONS: ELATimeException, ELAProductIdException,
     ELATimeModifiedException
 
 *)
@@ -637,9 +637,9 @@ function IsTrialGenuine: TLAKeyStatus;
     PARAMETERS:
     * TrialLength - trial length in days
 
-    RETURN CODES: lkOK, lkLocalTrialExpired
+    RETURN CODES: lkOK, lkLocalTrialExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    EXCEPTIONS: ELAProductIdException,
     ELATimeModifiedException
 
     NOTE: The function is only meant for local(unverified) trials.
@@ -655,9 +655,9 @@ function ActivateLocalTrial(TrialLength: LongWord): TLAKeyStatus;
 
     This function must be called on every start of your program during the trial period.
 
-    RETURN CODES: lkOK, lkLocalTrialExpired
+    RETURN CODES: lkOK, lkLocalTrialExpired, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    EXCEPTIONS: ELAProductIdException,
     ELATimeModifiedException
 
     NOTE: The function is only meant for local(unverified) trials.
@@ -673,9 +673,9 @@ function IsLocalTrialGenuine: TLAKeyStatus;
     PARAMETERS:
     * TrialExtensionLength - number of days to extend the trial
 
-    RETURN CODES: lkOK
+    RETURN CODES: lkOK, lkFail
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    EXCEPTIONS: ELAProductIdException,
     ELATimeModifiedException
 
     NOTE: The function is only meant for local(unverified) trials.
