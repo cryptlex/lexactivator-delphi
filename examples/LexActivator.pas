@@ -339,6 +339,19 @@ function GetLicenseUserEmail: UnicodeString;
 function GetLicenseUserName: UnicodeString;
 
 (*
+    FUNCTION: GetLicenseType()
+
+    PURPOSE: Gets the license type (node-locked or hosted-floating).
+
+    RESULT: License type
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetLicenseType: UnicodeString;
+
+(*
     FUNCTION: GetActivationMetadata()
 
     PURPOSE: Gets the activation metadata.
@@ -564,6 +577,38 @@ function IsLicenseValid: TLAKeyStatus;
 function ActivateTrial: TLAKeyStatus;
 
 (*
+    FUNCTION: ActivateTrialOffline()
+
+    PURPOSE: Activates your trial using the offline activation response file.
+
+    PARAMETERS:
+    * FilePath - path of the offline activation response file.
+
+    RETURN CODES: lkOK, lkTrialExpired, lkFail
+
+    EXCEPTIONS: ELAProductIdException,
+    ELAOfflineResponseFileException, ELAVMException, ELATimeException,
+    ELAFilePathException, ELAOfflineResponseFileExpiredException
+*)
+
+function ActivateTrialOffline(const FilePath: UnicodeString): TLAKeyStatus;
+
+(*
+    PROCEDURE: GenerateOfflineTrialActivationRequest()
+
+    PURPOSE: Generates the offline trial activation request needed for generating
+    offline trial activation response in the dashboard.
+
+    PARAMETERS:
+    * FilePath - path of the file for the offline request.
+
+    RETURN CODES: ELAFailException, ELAProductIdException,
+    ELAFilePermissionException
+*)
+
+procedure GenerateOfflineTrialActivationRequest(const FilePath: UnicodeString);
+
+(*
     FUNCTION: IsTrialGenuine()
 
     PURPOSE: It verifies whether trial has started and is genuine or not. The
@@ -656,7 +701,7 @@ procedure LAReset;
 
 type
   TLAStatusCode = type Integer;
-  
+
   {$M+}
   ELAError = class(Exception) // parent of all LexActivator exceptions
   protected
@@ -2055,6 +2100,41 @@ begin
     raise ELAFailException.Create('Failed to get the name associated with license user');
 end;
 
+function Thin_GetLicenseType(out name; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseType';
+
+function GetLicenseType: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseType(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseType(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the license type');
+end;
+
 function Thin_GetActivationMetadata(const key: PWideChar; out value; length: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetActivationMetadata';
 
@@ -2252,6 +2332,24 @@ function Thin_ActivateTrial: TLAStatusCode; cdecl;
 function ActivateTrial: TLAKeyStatus;
 begin
   Result := ELAError.CheckKeyStatus(Thin_ActivateTrial);
+end;
+
+function Thin_ActivateTrialOffline(const filePath: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'ActivateTrialOffline';
+
+function ActivateTrialOffline(const FilePath: UnicodeString): TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_ActivateTrialOffline(PWideChar(FilePath)));
+end;
+
+function Thin_GenerateOfflineTrialActivationRequest(const filePath: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GenerateOfflineTrialActivationRequest';
+
+procedure GenerateOfflineTrialActivationRequest(const FilePath: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_GenerateOfflineTrialActivationRequest(PWideChar(FilePath))) then
+    raise
+    ELAFailException.Create('Failed to generate the offline trial activation request');
 end;
 
 function Thin_IsTrialGenuine: TLAStatusCode; cdecl;
