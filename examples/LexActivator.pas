@@ -41,7 +41,7 @@ uses
   ;
 
 type
-  TLAFlags = (lfUser, lfSystem);
+  TLAFlags = (lfUser, lfSystem, lfInMemory);
   TLAKeyStatus = (lkOK, lkExpired, lkSuspended, lkGracePeriodOver,
     lkTrialExpired, lkLocalTrialExpired, lkFail,
     lkException // for callback
@@ -106,7 +106,7 @@ procedure SetProductData(const ProductData: UnicodeString);
 
     * Flags - depending upon whether your application requires admin/root
       permissions to run or not, this parameter can have one of the following
-      values: lfSystem, lfUser
+      values: lfSystem, lfUser, lfInMemory
 
     EXCEPTIONS: ELAWMICException, ELAProductFileException,
     ELAProductDataException, ELAProductIdException,
@@ -1229,7 +1229,7 @@ const
   LexActivator_DLL = 'LexActivator.dll';
 
 const
-  LAFlagsToLongWord: array[TLAFlags] of LongWord = (1, 2);
+  LAFlagsToLongWord: array[TLAFlags] of LongWord = (1, 2, 4);
 
 function LAFlagsToString(Item: TLAFlags): string;
 begin
