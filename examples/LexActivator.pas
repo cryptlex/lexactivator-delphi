@@ -649,8 +649,19 @@ function GetLibraryVersion: UnicodeString;
     RETURN CODES: LA_OK, LA_E_PRODUCT_ID, LA_E_LICENSE_KEY, LA_E_RELEASE_VERSION_FORMAT
 *)
 
-{TODO -oOCTAGRAM -cGeneral : callback for CheckForReleaseUpdate}
-// procedure CheckForReleaseUpdate(const Platform, Version, Channel: UnicodeString; CallbackType ReleaseUpdateCallback);
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString; Callback: TLAProcedureCallback; Synchronized: Boolean); overload;
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString; Callback: TLAMethodCallback; Synchronized: Boolean); overload;
+{$IFDEF DELPHI_HAS_CLOSURES}
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString; Callback: TLAClosureCallback; Synchronized: Boolean); overload;
+{$ENDIF}
+
+(*
+    PROCEDURE: ResetCheckForReleaseUpdateCallback()
+
+    PURPOSE: Resets release update check callback function.
+*)
+
+procedure ResetCheckForReleaseUpdateCallback;
 
 (*
     FUNCTION: ActivateLicense()
@@ -2135,42 +2146,56 @@ type
      lckProcedure,
      lckMethod
      {$IFDEF DELPHI_HAS_CLOSURES}, lckClosure{$ENDIF});
+  TLACallbackIndex = (lciSetLicenseCallback, lciCheckForReleaseUpdate);
 
 var
-  LALicenseCallbackKind: TLALicenseCallbackKind = lckNone;
-  LAProcedureCallback: TLAProcedureCallback;
-  LAMethodCallback: TLAMethodCallback;
+  LALicenseCallbackKind: array[TLACallbackIndex] of TLALicenseCallbackKind = (lckNone, lckNone);
+  LAProcedureCallback: array[TLACallbackIndex] of TLAProcedureCallback;
+  LAMethodCallback: array[TLACallbackIndex] of TLAMethodCallback;
   {$IFDEF DELPHI_HAS_CLOSURES}
-  LAClosureCallback: TLAClosureCallback;
+  LAClosureCallback: array[TLACallbackIndex] of TLAClosureCallback;
   {$ENDIF}
-  LALicenseCallbackSynchronized: Boolean;
-  LAStatusCode: TLAStatusCode;
-  LALicenseCallbackMutex: TRTLCriticalSection;
+  LALicenseCallbackSynchronized: array[TLACallbackIndex] of Boolean;
+  LAStatusCode: array[TLACallbackIndex] of TLAStatusCode;
+  LALicenseCallbackMutex: array[TLACallbackIndex] of TRTLCriticalSection;
 
 type
-  TLAThin_CallbackProxyClass = class
+  TLAThin_BaseCallbackProxyClass = class
   public
     class procedure Invoke;
+  protected
+    class function ProxyIndex: TLACallbackIndex; virtual; abstract;
   end;
 
-class procedure TLAThin_CallbackProxyClass.Invoke;
+  TLAThin_LicenseCallbackProxyClass = class(TLAThin_BaseCallbackProxyClass)
+  protected
+    class function ProxyIndex: TLACallbackIndex; override;
+  end;
+
+  TLAThin_UpdateCallbackProxyClass = class(TLAThin_BaseCallbackProxyClass)
+  protected
+    class function ProxyIndex: TLACallbackIndex; override;
+  end;
+
+class procedure TLAThin_BaseCallbackProxyClass.Invoke;
 var
   KeyStatus: TLAKeyStatus;
+  LocalProxyIndex: TLACallbackIndex;
 
   procedure DoInvoke(const Error: Exception);
   begin
-    case LALicenseCallbackKind of
+    case LALicenseCallbackKind[LocalProxyIndex] of
       lckNone: Exit;
       lckProcedure:
-        if Assigned(LAProcedureCallback) then
-          LAProcedureCallback(Error, KeyStatus);
+        if Assigned(LAProcedureCallback[LocalProxyIndex]) then
+          LAProcedureCallback[LocalProxyIndex](Error, KeyStatus);
       lckMethod:
-        if Assigned(LAMethodCallback) then
-          LAMethodCallback(Error, KeyStatus);
+        if Assigned(LAMethodCallback[LocalProxyIndex]) then
+          LAMethodCallback[LocalProxyIndex](Error, KeyStatus);
       {$IFDEF DELPHI_HAS_CLOSURES}
       lckClosure:
-        if Assigned(LAClosureCallback) then
-          LAClosureCallback(Error, KeyStatus);
+        if Assigned(LAClosureCallback[LocalProxyIndex]) then
+          LAClosureCallback[LocalProxyIndex](Error, KeyStatus);
       {$ENDIF}
     else
       // there should be default logging here like NSLog, but there is none in Delphi
@@ -2182,21 +2207,23 @@ var
 
 begin
   try
-    EnterCriticalSection(LALicenseCallbackMutex);
+    LocalProxyIndex := ProxyIndex;
+
+    EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
     try
-      case LALicenseCallbackKind of
+      case LALicenseCallbackKind[LocalProxyIndex] of
         lckNone: Exit;
-        lckProcedure: if not Assigned(LAProcedureCallback) then Exit;
-        lckMethod: if not Assigned(LAMethodCallback) then Exit;
+        lckProcedure: if not Assigned(LAProcedureCallback[LocalProxyIndex]) then Exit;
+        lckMethod: if not Assigned(LAMethodCallback[LocalProxyIndex]) then Exit;
         {$IFDEF DELPHI_HAS_CLOSURES}
-        lckClosure: if not Assigned(LAClosureCallback) then Exit;
+        lckClosure: if not Assigned(LAClosureCallback[LocalProxyIndex]) then Exit;
         {$ENDIF}
       else
         // there should be default logging here like NSLog, but there is none in Delphi
       end;
 
       try
-        KeyStatus := ELAError.CheckKeyStatus(LAStatusCode);
+        KeyStatus := ELAError.CheckKeyStatus(LAStatusCode[LocalProxyIndex]);
       except
         on Error: ELAError do
         begin
@@ -2208,7 +2235,7 @@ begin
 
       FailError := nil;
       try
-        FailError := ELAError.CreateByCode(LAStatusCode);
+        FailError := ELAError.CreateByCode(LAStatusCode[LocalProxyIndex]);
         DoInvoke(FailError);
       finally
         FreeAndNil(FailError);
@@ -2223,42 +2250,99 @@ begin
       //
       // Main thread is not allowed to proceed to X.Free until callback is finished
       // On the other hand, if callback removes itself, recursive mutex will allow that
-      LeaveCriticalSection(LALicenseCallbackMutex);
+      LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
     end;
   except
     // there should be default logging here like NSLog, but there is none in Delphi
   end;
 end;
 
+class function TLAThin_LicenseCallbackProxyClass.ProxyIndex: TLACallbackIndex;
+begin
+  Result := lciSetLicenseCallback;
+end;
+
+class function TLAThin_UpdateCallbackProxyClass.ProxyIndex: TLACallbackIndex;
+begin
+  Result := lciCheckForReleaseUpdate;
+end;
+
 procedure LAThin_CallbackProxy(StatusCode: LongWord); cdecl;
+const
+  LocalProxyIndex = lciSetLicenseCallback;
+type
+  TLAThin_CallbackProxyClass = TLAThin_LicenseCallbackProxyClass;
 begin
   try
-    EnterCriticalSection(LALicenseCallbackMutex);
+    EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
     try
-      case LALicenseCallbackKind of
+      case LALicenseCallbackKind[LocalProxyIndex] of
         lckNone: Exit;
-        lckProcedure: if not Assigned(LAProcedureCallback) then Exit;
-        lckMethod: if not Assigned(LAMethodCallback) then Exit;
+        lckProcedure: if not Assigned(LAProcedureCallback[LocalProxyIndex]) then Exit;
+        lckMethod: if not Assigned(LAMethodCallback[LocalProxyIndex]) then Exit;
         {$IFDEF DELPHI_HAS_CLOSURES}
-        lckClosure: if not Assigned(LAClosureCallback) then Exit;
+        lckClosure: if not Assigned(LAClosureCallback[LocalProxyIndex]) then Exit;
         {$ENDIF}
       else
         // there should be default logging here like NSLog, but there is none in Delphi
       end;
 
-      LAStatusCode := TLAStatusCode(StatusCode);
-      if not LALicenseCallbackSynchronized then
+      LAStatusCode[LocalProxyIndex] := TLAStatusCode(StatusCode);
+      if not LALicenseCallbackSynchronized[LocalProxyIndex] then
       begin
         TLAThin_CallbackProxyClass.Invoke;
         Exit;
       end;
     finally
-      LeaveCriticalSection(LALicenseCallbackMutex);
+      LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
     end;
 
     // Race condition here
     //
-    // Invoke should proably run exactly the same (captured) handler,
+    // Invoke should probably run exactly the same (captured) handler,
+    // but instead it reenters mutex, and handler can be different at
+    // that moment. For most sane use cases behavior should be sound
+    // anyway.
+
+    TThread.Synchronize(nil, TLAThin_CallbackProxyClass.Invoke);
+  except
+    // there should be default logging here like NSLog, but there is none in Delphi
+  end;
+end;
+
+procedure LAThin_CallbackProxy2(StatusCode: LongWord); cdecl;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+type
+  TLAThin_CallbackProxyClass = TLAThin_UpdateCallbackProxyClass;
+begin
+  try
+    EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+    try
+      case LALicenseCallbackKind[LocalProxyIndex] of
+        lckNone: Exit;
+        lckProcedure: if not Assigned(LAProcedureCallback[LocalProxyIndex]) then Exit;
+        lckMethod: if not Assigned(LAMethodCallback[LocalProxyIndex]) then Exit;
+        {$IFDEF DELPHI_HAS_CLOSURES}
+        lckClosure: if not Assigned(LAClosureCallback[LocalProxyIndex]) then Exit;
+        {$ENDIF}
+      else
+        // there should be default logging here like NSLog, but there is none in Delphi
+      end;
+
+      LAStatusCode[LocalProxyIndex] := TLAStatusCode(StatusCode);
+      if not LALicenseCallbackSynchronized[LocalProxyIndex] then
+      begin
+        TLAThin_CallbackProxyClass.Invoke;
+        Exit;
+      end;
+    finally
+      LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+    end;
+
+    // Race condition here
+    //
+    // Invoke should probably run exactly the same (captured) handler,
     // but instead it reenters mutex, and handler can be different at
     // that moment. For most sane use cases behavior should be sound
     // anyway.
@@ -2270,51 +2354,57 @@ begin
 end;
 
 procedure SetLicenseCallback(Callback: TLAProcedureCallback; Synchronized: Boolean);
+const
+  LocalProxyIndex = lciSetLicenseCallback;
 begin
-  EnterCriticalSection(LALicenseCallbackMutex);
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   try
-    LAProcedureCallback := Callback;
-    LALicenseCallbackSynchronized := Synchronized;
-    LALicenseCallbackKind := lckProcedure;
+    LAProcedureCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckProcedure;
 
     if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
-    LeaveCriticalSection(LALicenseCallbackMutex);
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   end;
 end;
 
 procedure SetLicenseCallback(Callback: TLAMethodCallback; Synchronized: Boolean);
+const
+  LocalProxyIndex = lciSetLicenseCallback;
 begin
-  EnterCriticalSection(LALicenseCallbackMutex);
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   try
-    LAMethodCallback := Callback;
-    LALicenseCallbackSynchronized := Synchronized;
-    LALicenseCallbackKind := lckMethod;
+    LAMethodCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckMethod;
 
     if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
-    LeaveCriticalSection(LALicenseCallbackMutex);
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   end;
 end;
 
 {$IFDEF DELPHI_HAS_CLOSURES}
 procedure SetLicenseCallback(Callback: TLAClosureCallback; Synchronized: Boolean);
+const
+  LocalProxyIndex = lciSetLicenseCallback;
 begin
-  EnterCriticalSection(LALicenseCallbackMutex);
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   try
-    LAClosureCallback := Callback;
-    LALicenseCallbackSynchronized := Synchronized;
-    LALicenseCallbackKind := lckClosure;
+    LAClosureCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckClosure;
 
     if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
-    LeaveCriticalSection(LALicenseCallbackMutex);
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   end;
 end;
 {$ENDIF}
@@ -2325,16 +2415,18 @@ begin
 end;
 
 procedure ResetLicenseCallback;
+const
+  LocalProxyIndex = lciSetLicenseCallback;
 begin
-  EnterCriticalSection(LALicenseCallbackMutex);
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   try
-    LALicenseCallbackKind := lckNone;
+    LALicenseCallbackKind[LocalProxyIndex] := lckNone;
 
     if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackDummy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
-    LeaveCriticalSection(LALicenseCallbackMutex);
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   end;
 end;
 
@@ -2917,6 +3009,89 @@ begin
   if not Try256(Result) then TryHigh(Result);
   if not ELAError.CheckOKFail(ErrorCode) then
     raise ELAFailException.Create('Failed to get the version of this library');
+end;
+
+function Thin_CheckForReleaseUpdate(const aplatform, version, channel: PWideChar;
+  releaseUpdateCallback: TLAThin_CallbackType): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'CheckForReleaseUpdate';
+
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString;
+  Callback: TLAProcedureCallback; Synchronized: Boolean); overload;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+begin
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  try
+    LAProcedureCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckProcedure;
+
+    if not ELAError.CheckOKFail(Thin_CheckForReleaseUpdate
+        (PWideChar(APlatform), PWideChar(Version), PWideChar(Channel),
+         LAThin_CallbackProxy2)) then
+      raise
+      ELAFailException.Create('Failed to set release update check callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  end;
+end;
+
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString;
+  Callback: TLAMethodCallback; Synchronized: Boolean); overload;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+begin
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  try
+    LAMethodCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckMethod;
+
+    if not ELAError.CheckOKFail(Thin_CheckForReleaseUpdate
+        (PWideChar(APlatform), PWideChar(Version), PWideChar(Channel),
+         LAThin_CallbackProxy2)) then
+      raise
+      ELAFailException.Create('Failed to set release update check callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  end;
+end;
+
+{$IFDEF DELPHI_HAS_CLOSURES}
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString;
+  Callback: TLAClosureCallback; Synchronized: Boolean); overload;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+begin
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  try
+    LAClosureCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckClosure;
+
+    if not ELAError.CheckOKFail(Thin_CheckForReleaseUpdate
+        (PWideChar(APlatform), PWideChar(Version), PWideChar(Channel),
+         LAThin_CallbackProxy2)) then
+      raise
+      ELAFailException.Create('Failed to set release update check callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  end;
+end;
+{$ENDIF}
+
+procedure ResetCheckForReleaseUpdateCallback;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+begin
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  try
+    LALicenseCallbackKind[LocalProxyIndex] := lckNone;
+
+    // no API to unset
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  end;
 end;
 
 function Thin_ActivateLicense: TLAStatusCode; cdecl;
@@ -3517,9 +3692,12 @@ begin
 end;
 
 initialization
-  InitializeCriticalSection(LALicenseCallbackMutex);
+  InitializeCriticalSection(LALicenseCallbackMutex[lciSetLicenseCallback]);
+  InitializeCriticalSection(LALicenseCallbackMutex[lciCheckForReleaseUpdate]);
 finalization
+  try ResetCheckForReleaseUpdateCallback; except end;
   try ResetLicenseCallback; except end;
-  DeleteCriticalSection(LALicenseCallbackMutex);
+  DeleteCriticalSection(LALicenseCallbackMutex[lciCheckForReleaseUpdate]);
+  DeleteCriticalSection(LALicenseCallbackMutex[lciSetLicenseCallback]);
 end.
 
