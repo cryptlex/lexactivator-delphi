@@ -119,6 +119,50 @@ procedure SetProductData(const ProductData: UnicodeString);
 procedure SetProductId(const ProductId: UnicodeString; Flags: TLAFlags);
 
 (*
+    PROCEDURE: SetDataDirectory()
+
+    PURPOSE: In case you want to change the default directory used by LexActivator to
+    store the activation data on Linux and macOS, this function can be used to
+    set a different directory.
+
+    If you decide to use this function, then it must be called on every start of
+    your program before calling SetProductFile() or SetProductData() function.
+
+    Please ensure that the directory exists and your app has read and write
+    permissions in the directory.
+
+    PARAMETERS:
+    * DirectoryPath - absolute path of the directory.
+
+    EXCEPTIONS: ELAFilePermissionException
+*)
+
+procedure SetDataDirectory(const DirectoryPath: UnicodeString);
+
+// Android-only SetJniEnv() is currently omitted
+
+(*
+    PROCEDURE: SetCustomDeviceFingerprint()
+
+    PURPOSE: In case you don't want to use the LexActivator's advanced
+    device fingerprinting algorithm, this function can be used to set a custom
+    device fingerprint.
+
+    If you decide to use your own custom device fingerprint then this function must be
+    called on every start of your program immediately after calling SetProductFile()
+    or SetProductData() function.
+
+    The license fingerprint matching strategy is ignored if this function is used.
+
+    PARAMETERS:
+    * Fingerprint - string of minimum length 64 characters and maximum length 256 characters.
+
+    EXCEPTIONS: ELAProductIdException, ELACustomFingerprintLengthException
+*)
+
+procedure SetCustomDeviceFingerprint(const Fingerprint: UnicodeString);
+
+(*
     PROCEDURE: SetLicenseKey()
 
     PURPOSE: Sets the license key required to activate the license.
@@ -132,6 +176,23 @@ procedure SetProductId(const ProductId: UnicodeString; Flags: TLAFlags);
 procedure SetLicenseKey(const LicenseKey: UnicodeString);
 
 (*
+    PROCEDURE: SetLicenseUserCredential()
+
+    PURPOSE: Sets the license user email and password for authentication.
+
+    This function must be called before ActivateLicense() or IsLicenseGenuine()
+    function if 'requireAuthentication' property of the license is set to true.
+
+    PARAMETERS:
+    * Email - user email address.
+    * Password - user password.
+
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
+*)
+
+procedure SetLicenseUserCredential(const Email, Password: UnicodeString);
+
+(*
     PROCEDURE: SetLicenseCallback()
 
     PURPOSE: Sets server sync callback function.
@@ -139,8 +200,9 @@ procedure SetLicenseKey(const LicenseKey: UnicodeString);
     Whenever the server sync occurs in a separate thread, and server returns the response,
     license callback function gets invoked with the following status codes:
     LA_OK, LA_EXPIRED, LA_SUSPENDED,
-    LA_E_REVOKED, LA_E_ACTIVATION_NOT_FOUND, LA_E_MACHINE_FINGERPRINT
-    LA_E_COUNTRY, LA_E_INET, LA_E_SERVER, LA_E_RATE_LIMIT, LA_E_IP
+    LA_E_REVOKED, LA_E_ACTIVATION_NOT_FOUND, LA_E_MACHINE_FINGERPRINT,
+    LA_E_AUTHENTICATION_FAILED, LA_E_COUNTRY, LA_E_INET, LA_E_SERVER,
+    LA_E_RATE_LIMIT, LA_E_IP
 
     PARAMETERS:
     * Callback - name of the callback procedure, method or closure
@@ -230,6 +292,24 @@ procedure SetTrialActivationMetadata(const Key, Value: UnicodeString);
 procedure SetAppVersion(const AppVersion: UnicodeString);
 
 (*
+    PROCEDURE: SetOfflineActivationRequestMeterAttributeUses()
+
+    PURPOSE: Sets the meter attribute uses for the offline activation request.
+
+    This function should only be called before GenerateOfflineActivationRequest()
+    function to set the meter attributes in case of offline activation.
+
+    PARAMETERS:
+    * Name - name of the meter attribute
+    * AUses - the uses value
+
+    RETURN CODES: LA_OK, LA_E_PRODUCT_ID, LA_E_LICENSE_KEY
+*)
+
+procedure SetOfflineActivationRequestMeterAttributeUses
+  (const Name: UnicodeString; AUses: LongWord);
+
+(*
     PROCEDURE: SetNetworkProxy()
 
     PURPOSE: Sets the network proxy to be used when contacting Cryptlex servers.
@@ -251,6 +331,20 @@ procedure SetAppVersion(const AppVersion: UnicodeString);
 *)
 
 procedure SetNetworkProxy(const Proxy: UnicodeString);
+
+(*
+    PROCEDURE: SetCryptlexHost()
+
+    PURPOSE: In case you are running Cryptlex on-premise, you can set the
+    host for your on-premise server.
+
+    PARAMETERS:
+    * Host - the address of the Cryptlex on-premise server
+
+    EXCEPTIONS: ELAProductIdException, ELAHostURLException
+*)
+
+procedure SetCryptlexHost(const Host: UnicodeString);
 
 (*
     FUNCTION: GetProductMetadata()
@@ -280,11 +374,29 @@ function GetProductMetadata(const Key: UnicodeString): UnicodeString;
 
     RESULT: License metadata as set in the dashboard
 
-    EXCEPTIONS: ELAProductIdException, ELAMetadataKeyNotFoundException,
-    ELABufferSizeException
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELAMetadataKeyNotFoundException, ELABufferSizeException
 *)
 
 function GetLicenseMetadata(const Key: UnicodeString): UnicodeString;
+
+(*
+    PROCEDURE: GetLicenseMeterAttribute()
+
+    PURPOSE: Gets the license meter attribute allowed, total and gross uses.
+
+    PARAMETERS:
+    * Name - name of the meter attribute
+    * AllowedUses - the integer that receives the value
+    * TotalUses - the integer that receives the value
+    * GrossUses - the integer that receives the value
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELAMeterAttributeNotFound
+*)
+
+procedure GetLicenseMeterAttribute
+  (const Name: UnicodeString; out AllowedUses, TotalUses, GrossUses: LongWord);
 
 (*
     FUNCTION: GetLicenseKey()
@@ -298,6 +410,32 @@ function GetLicenseMetadata(const Key: UnicodeString): UnicodeString;
 *)
 
 function GetLicenseKey: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseAllowedActivations()
+
+    PURPOSE: Gets the allowed activations of the license.
+
+    RESULT: Allowed activations of the license.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
+*)
+
+function GetLicenseAllowedActivations: LongWord;
+
+(*
+    FUNCTION: GetLicenseTotalActivations()
+
+    PURPOSE: Gets the total activations of the license.
+
+    RESULT: Total activations of the license.
+
+    RETURN CODES: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
+*)
+
+function GetLicenseTotalActivations: LongWord;
 
 (*
     FUNCTION: GetLicenseExpiryDate()
@@ -328,15 +466,44 @@ function GetLicenseUserEmail: UnicodeString;
 (*
     FUNCTION: GetLicenseUserName()
 
-    PURPOSE: Gets the name associated with license user.
+    PURPOSE: Gets the name associated with the license user.
 
-    RESULT: Name associated with license user
+    RESULT: Name associated with the license user
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
     ELATimeModifiedException, ELABufferSizeException
 *)
 
 function GetLicenseUserName: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseUserCompany()
+
+    PURPOSE: Gets the company associated with the license user.
+
+    RESULT: Company associated with the license user.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetLicenseUserCompany: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseUserMetadata()
+
+    PURPOSE: Gets the metadata associated with the license user.
+
+    PARAMETERS:
+    * Key - key to retrieve the value
+
+    RESULT: metadata associated with the license user.
+
+    RETURN CODES: ELAFailException, ELAProductIdException,
+    ELAMetadataKeyNotFoundException, ELABufferSizeException
+*)
+
+function GetLicenseUserMetadata(const Key: UnicodeString): UnicodeString;
 
 (*
     FUNCTION: GetLicenseType()
@@ -366,6 +533,35 @@ function GetLicenseType: UnicodeString;
 *)
 
 function GetActivationMetadata(const Key: UnicodeString): UnicodeString;
+
+(*
+    FUNCTION: GetActivationMeterAttributeUses()
+
+    PURPOSE: Gets the meter attribute uses consumed by the activation.
+
+    PARAMETERS:
+    * Name - name of the meter attribute
+
+    RESULT: Meter attribute uses consumed by the activation.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELAMeterAttributeNotFoundException
+*)
+
+function GetActivationMeterAttributeUses(const Name: UnicodeString): LongWord;
+
+(*
+    FUNCTION: GetServerSyncGracePeriodExpiryDate()
+
+    PURPOSE: Gets the server sync grace period expiry date timestamp.
+
+    RESULT: Grace period expiry date timestamp.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
+*)
+
+function GetServerSyncGracePeriodExpiryDate: TDateTime;
 
 (*
     FUNCTION: GetTrialActivationMetadata()
@@ -423,6 +619,51 @@ function GetTrialId: UnicodeString;
 function GetLocalTrialExpiryDate: TDateTime;
 
 (*
+    FUNCTION: GetLibraryVersion()
+
+    PURPOSE: Gets the version of this library.
+
+    PARAMETERS:
+    * libraryVersion - pointer to a buffer that receives the value of the string
+    * length - size of the buffer pointed to by the libraryVersion parameter
+
+    RETURN CODES: LA_OK, LA_E_BUFFER_SIZE
+*)
+
+function GetLibraryVersion: UnicodeString;
+
+(*
+    FUNCTION: CheckForReleaseUpdate()
+
+    PURPOSE: Checks whether a new release is available for the product.
+
+    This function should only be used if you manage your releases through
+    Cryptlex release management API.
+
+    PARAMETERS:
+    * Platform - release platform e.g. windows, macos, linux
+    * Version - current release version
+    * Channel - release channel e.g. stable
+    * ReleaseUpdateCallback - name of the callback function.
+
+    RETURN CODES: LA_OK, LA_E_PRODUCT_ID, LA_E_LICENSE_KEY, LA_E_RELEASE_VERSION_FORMAT
+*)
+
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString; Callback: TLAProcedureCallback; Synchronized: Boolean); overload;
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString; Callback: TLAMethodCallback; Synchronized: Boolean); overload;
+{$IFDEF DELPHI_HAS_CLOSURES}
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString; Callback: TLAClosureCallback; Synchronized: Boolean); overload;
+{$ENDIF}
+
+(*
+    PROCEDURE: ResetCheckForReleaseUpdateCallback()
+
+    PURPOSE: Resets release update check callback function.
+*)
+
+procedure ResetCheckForReleaseUpdateCallback;
+
+(*
     FUNCTION: ActivateLicense()
 
     PURPOSE: Activates the license by contacting the Cryptlex servers. It
@@ -436,9 +677,9 @@ function GetLocalTrialExpiryDate: TDateTime;
 
     EXCEPTIONS: ELAProductIdException, ELAInetException,
     ELAVMException, ELATimeException, ELAActivationLimitException,
-    ELAServerException, ELAClientException, ELALicenseTypeException,
-    ELACountryException, ELAIPException, ELARateLimitException,
-    ELALicenseKeyException
+    ELAServerException, ELAClientException, ELAAuthenticationFailedException,
+    ELALicenseTypeException, ELACountryException, ELAIPException,
+    ELARateLimitException, ELALicenseKeyException
 *)
 
 function ActivateLicense: TLAKeyStatus;
@@ -530,7 +771,7 @@ procedure GenerateOfflineDeactivationRequest(const FilePath: UnicodeString);
     RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver, lkFail
 
     EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
-    ELATimeException, ELATimeModifiedException
+    ELATimeException, ELATimeModifiedException, ELAMachineFingerprintException
 
     NOTE: If application was activated offline using ActivateLicenseOffline() function, you
     may want to set grace period to 0 to ignore grace period.
@@ -551,7 +792,7 @@ function IsLicenseGenuine: TLAKeyStatus;
     RETURN CODES: lkOK, lkExpired, lkSuspended, lkGracePeriodOver, lkFail
 
     EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
-    ELATimeException
+    ELATimeException, ELATimeModifiedException, ELAMachineFingerprintException
 
     NOTE: You may want to set grace period to 0 to ignore grace period.
 *)
@@ -684,6 +925,63 @@ function IsLocalTrialGenuine: TLAKeyStatus;
 function ExtendLocalTrial(TrialExtensionLength: LongWord): TLAKeyStatus;
 
 (*
+    PROCEDURE: IncrementActivationMeterAttributeUses()
+
+    PURPOSE: Increments the meter attribute uses of the activation.
+
+    PARAMETERS:
+    * Name - name of the meter attribute
+    * Increment - the increment value
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELAMeterAttributeNotFoundException, ELAInetException, ELATimeException,
+    ELAServerException, ELAClientException,
+    ELAMeterAttributeUsesLimitReachedException,
+    ELAAuthenticationFailedException, ELACountryException, ELAIPException,
+    ELARateLimitException, ELALicenseKeyException
+*)
+
+procedure IncrementActivationMeterAttributeUses(const Name: UnicodeString; Increment: LongWord);
+
+(*
+    PROCEDURE: DecrementActivationMeterAttributeUses()
+
+    PURPOSE: Decrements the meter attribute uses of the activation.
+
+    PARAMETERS:
+    * Name - name of the meter attribute
+    * Decrement - the decrement value
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELAMeterAttributeNotFoundException, ELAInetException, ELATimeException,
+    ELAServerException, ELAClientException, ELARateLimitException,
+    ELALicenseKeyException, ELAAuthenticationFailedException,
+    ELACountryException, ELAIPException, ELAActivationNotFoundException
+
+    NOTE: If the decrement is more than the current uses, it resets the uses to 0.
+*)
+
+procedure DecrementActivationMeterAttributeUses(const Name: UnicodeString; Decrement: LongWord);
+
+(*
+    PROCEDURE: ResetActivationMeterAttributeUses()
+
+    PURPOSE: Resets the meter attribute uses consumed by the activation.
+
+    PARAMETERS:
+    * name - name of the meter attribute
+    * decrement - the decrement value
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELAMeterAttributeNotFoundException, ELAInetException, ELATimeException,
+    ELAServerException, ELAClientException, ELARateLimitException,
+    ELALicenseKeyException, ELAAuthenticationFailedException,
+    ELACountryException, ELAIPException, ELAActivationNotFoundException
+*)
+
+procedure ResetActivationMeterAttributeUses(const Name: UnicodeString);
+
+(*
     PROCEDURE: LAReset()
 
     PURPOSE: Resets the activation and trial data stored in the machine.
@@ -813,6 +1111,21 @@ type
     constructor Create;
   end;
 
+//    (*
+//        CODE: LA_RELEASE_UPDATE_AVAILABLE
+//
+//        MESSAGE: A new update is available for the product. This means a new release has
+//        been published for the product.
+//    *)
+//    LA_RELEASE_UPDATE_AVAILABLE = 30,
+//
+//    (*
+//        CODE: LA_RELEASE_NO_UPDATE_AVAILABLE
+//
+//        MESSAGE: No new update is available for the product. The current version is latest.
+//    *)
+//    LA_RELEASE_NO_UPDATE_AVAILABLE = 31,
+
     (*
         CODE: LA_E_FILE_PATH
 
@@ -860,7 +1173,7 @@ type
     (*
         CODE: LA_E_SYSTEM_PERMISSION
 
-        MESSAGE: Insufficent system permissions. Occurs when LA_SYSTEM flag is used
+        MESSAGE: Insufficient system permissions. Occurs when LA_SYSTEM flag is used
         but application is not run with admin privileges.
     *)
 
@@ -1149,6 +1462,62 @@ type
   end;
 
     (*
+        CODE: LA_E_RELEASE_VERSION_FORMAT
+
+        MESSAGE: Invalid version format.
+    *)
+
+  ELAReleaseVersionFormatException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_AUTHENTICATION_FAILED
+
+        MESSAGE: Incorrect email or password.
+    *)
+
+  ELAAuthenticationFailedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_METER_ATTRIBUTE_NOT_FOUND
+
+        MESSAGE: The meter attribute does not exist.
+    *)
+
+  ELAMeterAttributeNotFoundException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_METER_ATTRIBUTE_USES_LIMIT_REACHED
+
+        MESSAGE: The meter attribute has reached it's usage limit.
+    *)
+
+  ELAMeterAttributeUsesLimitReachedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CUSTOM_FINGERPRINT_LENGTH
+
+        MESSAGE: Custom device fingerprint length is less than 64 characters
+        or more than 256 characters.
+    *)
+
+  ELACustomFingerprintLengthException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
         CODE: LA_E_VM
 
         MESSAGE: Application is being run inside a virtual machine / hypervisor,
@@ -1178,6 +1547,18 @@ type
     *)
 
   ELAIPException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CONTAINER
+
+        MESSAGE: Application is being run inside a container and
+        activation has been disallowed in the container.
+    *)
+
+  ELAContainerException = class(ELAException)
   public
     constructor Create;
   end;
@@ -1319,6 +1700,23 @@ const
   LA_LOCAL_TRIAL_EXPIRED = TLAStatusCode(26);
 
     (*
+        CODE: LA_RELEASE_UPDATE_AVAILABLE
+
+        MESSAGE: A new update is available for the product. This means a new release has
+        been published for the product.
+    *)
+
+  LA_RELEASE_UPDATE_AVAILABLE = TLAStatusCode(30);
+
+    (*
+        CODE: LA_RELEASE_NO_UPDATE_AVAILABLE
+
+        MESSAGE: No new update is available for the product. The current version is latest.
+    *)
+
+  LA_RELEASE_NO_UPDATE_AVAILABLE = TLAStatusCode(31);
+
+    (*
         CODE: LA_E_FILE_PATH
 
         MESSAGE: Invalid file path.
@@ -1353,7 +1751,7 @@ const
     (*
         CODE: LA_E_SYSTEM_PERMISSION
 
-        MESSAGE: Insufficent system permissions. Occurs when LA_SYSTEM flag is used
+        MESSAGE: Insufficient system permissions. Occurs when LA_SYSTEM flag is used
         but application is not run with admin privileges.
     *)
 
@@ -1564,6 +1962,47 @@ const
   LA_E_TIME_MODIFIED = TLAStatusCode(69);
 
     (*
+        CODE: LA_E_RELEASE_VERSION_FORMAT
+
+        MESSAGE: Invalid version format.
+    *)
+
+  LA_E_RELEASE_VERSION_FORMAT = TLAStatusCode(70);
+
+    (*
+        CODE: LA_E_AUTHENTICATION_FAILED
+
+        MESSAGE: Incorrect email or password.
+    *)
+
+  LA_E_AUTHENTICATION_FAILED = TLAStatusCode(71);
+
+    (*
+        CODE: LA_E_METER_ATTRIBUTE_NOT_FOUND
+
+        MESSAGE: The meter attribute does not exist.
+    *)
+
+  LA_E_METER_ATTRIBUTE_NOT_FOUND = TLAStatusCode(72);
+
+    (*
+        CODE: LA_E_METER_ATTRIBUTE_USES_LIMIT_REACHED
+
+        MESSAGE: The meter attribute has reached it's usage limit.
+    *)
+
+  LA_E_METER_ATTRIBUTE_USES_LIMIT_REACHED = TLAStatusCode(73);
+
+    (*
+        CODE: LA_E_CUSTOM_FINGERPRINT_LENGTH
+
+        MESSAGE: Custom device fingerprint length is less than 64 characters
+        or more than 256 characters.
+    *)
+
+  LA_E_CUSTOM_FINGERPRINT_LENGTH = TLAStatusCode(74);
+
+    (*
         CODE: LA_E_VM
 
         MESSAGE: Application is being run inside a virtual machine / hypervisor,
@@ -1587,6 +2026,15 @@ const
     *)
 
   LA_E_IP = TLAStatusCode(82);
+
+    (*
+        CODE: LA_E_CONTAINER
+
+        MESSAGE: Application is being run inside a container and
+        activation has been disallowed in the container.
+    *)
+
+  LA_E_CONTAINER = TLAStatusCode(83);
 
     (*
         CODE: LA_E_RATE_LIMIT
@@ -1645,12 +2093,43 @@ begin
       'to %s', [ProductId]);
 end;
 
+function Thin_SetDataDirectory(const directoryPath: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetDataDirectory';
+
+procedure SetDataDirectory(const DirectoryPath: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetDataDirectory(PWideChar(DirectoryPath))) then
+    raise
+    ELAFailException.CreateFmt('Failed to change the directory used by ' +
+      'LexActivator to store the activation data to %s', [DirectoryPath]);
+end;
+
+function Thin_SetCustomDeviceFingerprint(const fingerprint: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetCustomDeviceFingerprint';
+
+procedure SetCustomDeviceFingerprint(const Fingerprint: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetCustomDeviceFingerprint(PWideChar(Fingerprint))) then
+    raise
+    ELAFailException.Create('Failed to set the custom device fingerprint');
+end;
+
 function Thin_SetLicenseKey(const licenseKey: PWideChar): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'SetLicenseKey';
 
 procedure SetLicenseKey(const LicenseKey: UnicodeString);
 begin
   if not ELAError.CheckOKFail(Thin_SetLicenseKey(PWideChar(LicenseKey))) then
+    raise
+    ELAFailException.Create('Failed to set the license key');
+end;
+
+function Thin_SetLicenseUserCredential(const email, password: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetLicenseUserCredential';
+
+procedure SetLicenseUserCredential(const Email, Password: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetLicenseUserCredential(PWideChar(Email), PWideChar(Password))) then
     raise
     ELAFailException.Create('Failed to set the license key');
 end;
@@ -1667,42 +2146,56 @@ type
      lckProcedure,
      lckMethod
      {$IFDEF DELPHI_HAS_CLOSURES}, lckClosure{$ENDIF});
+  TLACallbackIndex = (lciSetLicenseCallback, lciCheckForReleaseUpdate);
 
 var
-  LALicenseCallbackKind: TLALicenseCallbackKind = lckNone;
-  LAProcedureCallback: TLAProcedureCallback;
-  LAMethodCallback: TLAMethodCallback;
+  LALicenseCallbackKind: array[TLACallbackIndex] of TLALicenseCallbackKind = (lckNone, lckNone);
+  LAProcedureCallback: array[TLACallbackIndex] of TLAProcedureCallback;
+  LAMethodCallback: array[TLACallbackIndex] of TLAMethodCallback;
   {$IFDEF DELPHI_HAS_CLOSURES}
-  LAClosureCallback: TLAClosureCallback;
+  LAClosureCallback: array[TLACallbackIndex] of TLAClosureCallback;
   {$ENDIF}
-  LALicenseCallbackSynchronized: Boolean;
-  LAStatusCode: TLAStatusCode;
-  LALicenseCallbackMutex: TRTLCriticalSection;
+  LALicenseCallbackSynchronized: array[TLACallbackIndex] of Boolean;
+  LAStatusCode: array[TLACallbackIndex] of TLAStatusCode;
+  LALicenseCallbackMutex: array[TLACallbackIndex] of TRTLCriticalSection;
 
 type
-  TLAThin_CallbackProxyClass = class
+  TLAThin_BaseCallbackProxyClass = class
   public
     class procedure Invoke;
+  protected
+    class function ProxyIndex: TLACallbackIndex; virtual; abstract;
   end;
 
-class procedure TLAThin_CallbackProxyClass.Invoke;
+  TLAThin_LicenseCallbackProxyClass = class(TLAThin_BaseCallbackProxyClass)
+  protected
+    class function ProxyIndex: TLACallbackIndex; override;
+  end;
+
+  TLAThin_UpdateCallbackProxyClass = class(TLAThin_BaseCallbackProxyClass)
+  protected
+    class function ProxyIndex: TLACallbackIndex; override;
+  end;
+
+class procedure TLAThin_BaseCallbackProxyClass.Invoke;
 var
   KeyStatus: TLAKeyStatus;
+  LocalProxyIndex: TLACallbackIndex;
 
   procedure DoInvoke(const Error: Exception);
   begin
-    case LALicenseCallbackKind of
+    case LALicenseCallbackKind[LocalProxyIndex] of
       lckNone: Exit;
       lckProcedure:
-        if Assigned(LAProcedureCallback) then
-          LAProcedureCallback(Error, KeyStatus);
+        if Assigned(LAProcedureCallback[LocalProxyIndex]) then
+          LAProcedureCallback[LocalProxyIndex](Error, KeyStatus);
       lckMethod:
-        if Assigned(LAMethodCallback) then
-          LAMethodCallback(Error, KeyStatus);
+        if Assigned(LAMethodCallback[LocalProxyIndex]) then
+          LAMethodCallback[LocalProxyIndex](Error, KeyStatus);
       {$IFDEF DELPHI_HAS_CLOSURES}
       lckClosure:
-        if Assigned(LAClosureCallback) then
-          LAClosureCallback(Error, KeyStatus);
+        if Assigned(LAClosureCallback[LocalProxyIndex]) then
+          LAClosureCallback[LocalProxyIndex](Error, KeyStatus);
       {$ENDIF}
     else
       // there should be default logging here like NSLog, but there is none in Delphi
@@ -1714,21 +2207,23 @@ var
 
 begin
   try
-    EnterCriticalSection(LALicenseCallbackMutex);
+    LocalProxyIndex := ProxyIndex;
+
+    EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
     try
-      case LALicenseCallbackKind of
+      case LALicenseCallbackKind[LocalProxyIndex] of
         lckNone: Exit;
-        lckProcedure: if not Assigned(LAProcedureCallback) then Exit;
-        lckMethod: if not Assigned(LAMethodCallback) then Exit;
+        lckProcedure: if not Assigned(LAProcedureCallback[LocalProxyIndex]) then Exit;
+        lckMethod: if not Assigned(LAMethodCallback[LocalProxyIndex]) then Exit;
         {$IFDEF DELPHI_HAS_CLOSURES}
-        lckClosure: if not Assigned(LAClosureCallback) then Exit;
+        lckClosure: if not Assigned(LAClosureCallback[LocalProxyIndex]) then Exit;
         {$ENDIF}
       else
         // there should be default logging here like NSLog, but there is none in Delphi
       end;
 
       try
-        KeyStatus := ELAError.CheckKeyStatus(LAStatusCode);
+        KeyStatus := ELAError.CheckKeyStatus(LAStatusCode[LocalProxyIndex]);
       except
         on Error: ELAError do
         begin
@@ -1740,7 +2235,7 @@ begin
 
       FailError := nil;
       try
-        FailError := ELAError.CreateByCode(LAStatusCode);
+        FailError := ELAError.CreateByCode(LAStatusCode[LocalProxyIndex]);
         DoInvoke(FailError);
       finally
         FreeAndNil(FailError);
@@ -1755,42 +2250,99 @@ begin
       //
       // Main thread is not allowed to proceed to X.Free until callback is finished
       // On the other hand, if callback removes itself, recursive mutex will allow that
-      LeaveCriticalSection(LALicenseCallbackMutex);
+      LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
     end;
   except
     // there should be default logging here like NSLog, but there is none in Delphi
   end;
 end;
 
+class function TLAThin_LicenseCallbackProxyClass.ProxyIndex: TLACallbackIndex;
+begin
+  Result := lciSetLicenseCallback;
+end;
+
+class function TLAThin_UpdateCallbackProxyClass.ProxyIndex: TLACallbackIndex;
+begin
+  Result := lciCheckForReleaseUpdate;
+end;
+
 procedure LAThin_CallbackProxy(StatusCode: LongWord); cdecl;
+const
+  LocalProxyIndex = lciSetLicenseCallback;
+type
+  TLAThin_CallbackProxyClass = TLAThin_LicenseCallbackProxyClass;
 begin
   try
-    EnterCriticalSection(LALicenseCallbackMutex);
+    EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
     try
-      case LALicenseCallbackKind of
+      case LALicenseCallbackKind[LocalProxyIndex] of
         lckNone: Exit;
-        lckProcedure: if not Assigned(LAProcedureCallback) then Exit;
-        lckMethod: if not Assigned(LAMethodCallback) then Exit;
+        lckProcedure: if not Assigned(LAProcedureCallback[LocalProxyIndex]) then Exit;
+        lckMethod: if not Assigned(LAMethodCallback[LocalProxyIndex]) then Exit;
         {$IFDEF DELPHI_HAS_CLOSURES}
-        lckClosure: if not Assigned(LAClosureCallback) then Exit;
+        lckClosure: if not Assigned(LAClosureCallback[LocalProxyIndex]) then Exit;
         {$ENDIF}
       else
         // there should be default logging here like NSLog, but there is none in Delphi
       end;
 
-      LAStatusCode := TLAStatusCode(StatusCode);
-      if not LALicenseCallbackSynchronized then
+      LAStatusCode[LocalProxyIndex] := TLAStatusCode(StatusCode);
+      if not LALicenseCallbackSynchronized[LocalProxyIndex] then
       begin
         TLAThin_CallbackProxyClass.Invoke;
         Exit;
       end;
     finally
-      LeaveCriticalSection(LALicenseCallbackMutex);
+      LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
     end;
 
     // Race condition here
     //
-    // Invoke should proably run exactly the same (captured) handler,
+    // Invoke should probably run exactly the same (captured) handler,
+    // but instead it reenters mutex, and handler can be different at
+    // that moment. For most sane use cases behavior should be sound
+    // anyway.
+
+    TThread.Synchronize(nil, TLAThin_CallbackProxyClass.Invoke);
+  except
+    // there should be default logging here like NSLog, but there is none in Delphi
+  end;
+end;
+
+procedure LAThin_CallbackProxy2(StatusCode: LongWord); cdecl;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+type
+  TLAThin_CallbackProxyClass = TLAThin_UpdateCallbackProxyClass;
+begin
+  try
+    EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+    try
+      case LALicenseCallbackKind[LocalProxyIndex] of
+        lckNone: Exit;
+        lckProcedure: if not Assigned(LAProcedureCallback[LocalProxyIndex]) then Exit;
+        lckMethod: if not Assigned(LAMethodCallback[LocalProxyIndex]) then Exit;
+        {$IFDEF DELPHI_HAS_CLOSURES}
+        lckClosure: if not Assigned(LAClosureCallback[LocalProxyIndex]) then Exit;
+        {$ENDIF}
+      else
+        // there should be default logging here like NSLog, but there is none in Delphi
+      end;
+
+      LAStatusCode[LocalProxyIndex] := TLAStatusCode(StatusCode);
+      if not LALicenseCallbackSynchronized[LocalProxyIndex] then
+      begin
+        TLAThin_CallbackProxyClass.Invoke;
+        Exit;
+      end;
+    finally
+      LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+    end;
+
+    // Race condition here
+    //
+    // Invoke should probably run exactly the same (captured) handler,
     // but instead it reenters mutex, and handler can be different at
     // that moment. For most sane use cases behavior should be sound
     // anyway.
@@ -1802,51 +2354,57 @@ begin
 end;
 
 procedure SetLicenseCallback(Callback: TLAProcedureCallback; Synchronized: Boolean);
+const
+  LocalProxyIndex = lciSetLicenseCallback;
 begin
-  EnterCriticalSection(LALicenseCallbackMutex);
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   try
-    LAProcedureCallback := Callback;
-    LALicenseCallbackSynchronized := Synchronized;
-    LALicenseCallbackKind := lckProcedure;
+    LAProcedureCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckProcedure;
 
     if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
-    LeaveCriticalSection(LALicenseCallbackMutex);
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   end;
 end;
 
 procedure SetLicenseCallback(Callback: TLAMethodCallback; Synchronized: Boolean);
+const
+  LocalProxyIndex = lciSetLicenseCallback;
 begin
-  EnterCriticalSection(LALicenseCallbackMutex);
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   try
-    LAMethodCallback := Callback;
-    LALicenseCallbackSynchronized := Synchronized;
-    LALicenseCallbackKind := lckMethod;
+    LAMethodCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckMethod;
 
     if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
-    LeaveCriticalSection(LALicenseCallbackMutex);
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   end;
 end;
 
 {$IFDEF DELPHI_HAS_CLOSURES}
 procedure SetLicenseCallback(Callback: TLAClosureCallback; Synchronized: Boolean);
+const
+  LocalProxyIndex = lciSetLicenseCallback;
 begin
-  EnterCriticalSection(LALicenseCallbackMutex);
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   try
-    LAClosureCallback := Callback;
-    LALicenseCallbackSynchronized := Synchronized;
-    LALicenseCallbackKind := lckClosure;
+    LAClosureCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckClosure;
 
     if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
-    LeaveCriticalSection(LALicenseCallbackMutex);
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   end;
 end;
 {$ENDIF}
@@ -1857,16 +2415,18 @@ begin
 end;
 
 procedure ResetLicenseCallback;
+const
+  LocalProxyIndex = lciSetLicenseCallback;
 begin
-  EnterCriticalSection(LALicenseCallbackMutex);
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   try
-    LALicenseCallbackKind := lckNone;
+    LALicenseCallbackKind[LocalProxyIndex] := lckNone;
 
     if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackDummy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
-    LeaveCriticalSection(LALicenseCallbackMutex);
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
   end;
 end;
 
@@ -1901,6 +2461,18 @@ begin
     'application to %s', [AppVersion]);
 end;
 
+function Thin_SetOfflineActivationRequestMeterAttributeUses
+  (const name: PWideChar; AUses: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetOfflineActivationRequestMeterAttributeUses';
+
+procedure SetOfflineActivationRequestMeterAttributeUses
+  (const Name: UnicodeString; AUses: LongWord);
+begin
+  if not ELAError.CheckOKFail(Thin_SetOfflineActivationRequestMeterAttributeUses(PWideChar(Name), AUses)) then
+    raise
+    ELAFailException.CreateFmt('Failed to set the meter attribute %s uses for the offline activation request', [Name]);
+end;
+
 function Thin_SetNetworkProxy(const proxy: PWideChar): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'SetNetworkProxy';
 
@@ -1910,6 +2482,17 @@ begin
     raise
     ELAFailException.CreateFmt('Failed to set the network proxy to ' +
     '%s', [Proxy]);
+end;
+
+function Thin_SetCryptlexHost(const host: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetCryptlexHost';
+
+procedure SetCryptlexHost(const Host: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetCryptlexHost(PWideChar(Host))) then
+    raise
+    ELAFailException.CreateFmt('Failed to set the ' +
+      'host for your on-premise server to %s', [Host]);
 end;
 
 function Thin_GetProductMetadata(const key: PWideChar; out value; length: LongWord): TLAStatusCode; cdecl;
@@ -1982,6 +2565,19 @@ begin
     raise ELAFailException.CreateFmt('Failed to get the license metadata with key %s', [Key]);
 end;
 
+function Thin_GetLicenseMeterAttribute
+  (const name: PWideChar; out allowedUses, totalUses, grossUses: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseMeterAttribute';
+
+procedure GetLicenseMeterAttribute
+  (const Name: UnicodeString; out AllowedUses, TotalUses, GrossUses: LongWord);
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseMeterAttribute
+    (PWideChar(Name), AllowedUses, TotalUses, GrossUses)) then
+    raise
+    ELAFailException.CreateFmt('Failed to get the license meter attribute %s uses', [Name]);
+end;
+
 function Thin_GetLicenseKey(out licenseKey; length: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseKey';
 
@@ -2017,6 +2613,26 @@ begin
     raise ELAFailException.Create('Failed to get the license key used for activation');
 end;
 
+function Thin_GetLicenseAllowedActivations(out allowedActivations: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseAllowedActivations';
+
+function GetLicenseAllowedActivations: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseAllowedActivations(Result)) then
+    raise
+    ELAFailException.Create('Failed to get the allowed activations of the license');
+end;
+
+function Thin_GetLicenseTotalActivations(out totalActivations: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseTotalActivations';
+
+function GetLicenseTotalActivations: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseTotalActivations(Result)) then
+    raise
+    ELAFailException.Create('Failed to get the total activations of the license');
+end;
+
 function Thin_GetLicenseExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseExpiryDate';
 
@@ -2027,7 +2643,7 @@ begin
   if not ELAError.CheckOKFail(Thin_GetLicenseExpiryDate(ExpiryDate)) then
     raise
     ELAFailException.Create('Failed to get the license expiry date timestamp');
-  Result := UnixToDateTime(ExpiryDate);  
+  Result := UnixToDateTime(ExpiryDate);
 end;
 
 function Thin_GetLicenseUserEmail(out email; length: LongWord): TLAStatusCode; cdecl;
@@ -2097,7 +2713,77 @@ var
 begin
   if not Try256(Result) then TryHigh(Result);
   if not ELAError.CheckOKFail(ErrorCode) then
-    raise ELAFailException.Create('Failed to get the name associated with license user');
+    raise ELAFailException.Create('Failed to get the name associated with the license user');
+end;
+
+function Thin_GetLicenseUserCompany(out company; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseUserCompany';
+
+function GetLicenseUserCompany: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseUserCompany(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseUserCompany(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the company associated with the license user');
+end;
+
+function Thin_GetLicenseUserMetadata(const key: PWideChar; out value; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseUserMetadata';
+
+function GetLicenseUserMetadata(const Key: UnicodeString): UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseUserMetadata(PWideChar(Key), Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseUserMetadata(PWideChar(Key), PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.CreateFmt('Failed to get the metadata %s associated with the license user', [Key]);
 end;
 
 function Thin_GetLicenseType(out name; length: LongWord): TLAStatusCode; cdecl;
@@ -2168,6 +2854,30 @@ begin
   if not Try256(Result) then TryHigh(Result);
   if not ELAError.CheckOKFail(ErrorCode) then
     raise ELAFailException.CreateFmt('Failed to get the activation metadata with key %s', [Key]);
+end;
+
+function Thin_GetActivationMeterAttributeUses(const name: PWideChar; out AUses: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetActivationMeterAttributeUses';
+
+function GetActivationMeterAttributeUses(const Name: UnicodeString): LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetActivationMeterAttributeUses(PWideChar(Name), Result)) then
+    raise
+    ELAFailException.CreateFmt
+    ('Failed to get the meter attribute %s uses consumed by the activation', [Name]);
+end;
+
+function Thin_GetServerSyncGracePeriodExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetServerSyncGracePeriodExpiryDate';
+
+function GetServerSyncGracePeriodExpiryDate: TDateTime;
+var
+  ExpiryDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetServerSyncGracePeriodExpiryDate(ExpiryDate)) then
+    raise
+    ELAFailException.Create('Failed to get the server sync grace period expiry date timestamp');
+  Result := UnixToDateTime(ExpiryDate);
 end;
 
 function Thin_GetTrialActivationMetadata(const key: PWideChar; out value; length: LongWord): TLAStatusCode; cdecl;
@@ -2264,6 +2974,124 @@ begin
     raise
     ELAFailException.Create('Failed to get the trial expiry date timestamp');
   Result := UnixToDateTime(TrialExpiryDate);
+end;
+
+function Thin_GetLibraryVersion(out libraryVersion; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLibraryVersion';
+
+function GetLibraryVersion: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLibraryVersion(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLibraryVersion(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the version of this library');
+end;
+
+function Thin_CheckForReleaseUpdate(const aplatform, version, channel: PWideChar;
+  releaseUpdateCallback: TLAThin_CallbackType): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'CheckForReleaseUpdate';
+
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString;
+  Callback: TLAProcedureCallback; Synchronized: Boolean); overload;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+begin
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  try
+    LAProcedureCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckProcedure;
+
+    if not ELAError.CheckOKFail(Thin_CheckForReleaseUpdate
+        (PWideChar(APlatform), PWideChar(Version), PWideChar(Channel),
+         LAThin_CallbackProxy2)) then
+      raise
+      ELAFailException.Create('Failed to set release update check callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  end;
+end;
+
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString;
+  Callback: TLAMethodCallback; Synchronized: Boolean); overload;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+begin
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  try
+    LAMethodCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckMethod;
+
+    if not ELAError.CheckOKFail(Thin_CheckForReleaseUpdate
+        (PWideChar(APlatform), PWideChar(Version), PWideChar(Channel),
+         LAThin_CallbackProxy2)) then
+      raise
+      ELAFailException.Create('Failed to set release update check callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  end;
+end;
+
+{$IFDEF DELPHI_HAS_CLOSURES}
+procedure CheckForReleaseUpdate(const APlatform, Version, Channel: UnicodeString;
+  Callback: TLAClosureCallback; Synchronized: Boolean); overload;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+begin
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  try
+    LAClosureCallback[LocalProxyIndex] := Callback;
+    LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
+    LALicenseCallbackKind[LocalProxyIndex] := lckClosure;
+
+    if not ELAError.CheckOKFail(Thin_CheckForReleaseUpdate
+        (PWideChar(APlatform), PWideChar(Version), PWideChar(Channel),
+         LAThin_CallbackProxy2)) then
+      raise
+      ELAFailException.Create('Failed to set release update check callback');
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  end;
+end;
+{$ENDIF}
+
+procedure ResetCheckForReleaseUpdateCallback;
+const
+  LocalProxyIndex = lciCheckForReleaseUpdate;
+begin
+  EnterCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  try
+    LALicenseCallbackKind[LocalProxyIndex] := lckNone;
+
+    // no API to unset
+  finally
+    LeaveCriticalSection(LALicenseCallbackMutex[LocalProxyIndex]);
+  end;
 end;
 
 function Thin_ActivateLicense: TLAStatusCode; cdecl;
@@ -2384,6 +3212,36 @@ begin
   Result := ELAError.CheckKeyStatus(Thin_ExtendLocalTrial(TrialExtensionLength));
 end;
 
+function Thin_IncrementActivationMeterAttributeUses(const name: PWideChar; increment: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'IncrementActivationMeterAttributeUses';
+
+procedure IncrementActivationMeterAttributeUses(const Name: UnicodeString; Increment: LongWord);
+begin
+  if not ELAError.CheckOKFail(Thin_IncrementActivationMeterAttributeUses(PWideChar(Name), Increment)) then
+    raise
+    ELAFailException.CreateFmt('Failed to increment the meter attribute %s uses of the activation', [Name]);
+end;
+
+function Thin_DecrementActivationMeterAttributeUses(const name: PWideChar; decrement: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'DecrementActivationMeterAttributeUses';
+
+procedure DecrementActivationMeterAttributeUses(const Name: UnicodeString; Decrement: LongWord);
+begin
+  if not ELAError.CheckOKFail(Thin_DecrementActivationMeterAttributeUses(PWideChar(Name), Decrement)) then
+    raise
+    ELAFailException.CreateFmt('Failed to decrement the meter attribute %s uses of the activation', [Name]);
+end;
+
+function Thin_ResetActivationMeterAttributeUses(const name: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'ResetActivationMeterAttributeUses';
+
+procedure ResetActivationMeterAttributeUses(const Name: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_ResetActivationMeterAttributeUses(PWideChar(Name))) then
+    raise
+    ELAFailException.CreateFmt('Failed to reset the meter attribute %s uses consumed by the activation', [Name]);
+end;
+
 function Thin_Reset: TLAStatusCode; cdecl;
   external LexActivator_DLL name 'Reset';
 
@@ -2404,6 +3262,8 @@ begin
     LA_GRACE_PERIOD_OVER: Result := ELAGracePeriodOverError.Create;
     LA_TRIAL_EXPIRED: Result := ELATrialExpiredError.Create;
     LA_LOCAL_TRIAL_EXPIRED: Result := ELALocalTrialExpiredError.Create;
+    LA_RELEASE_UPDATE_AVAILABLE: Result := ELAUnknownErrorCodeException.Create(ErrorCode);
+    LA_RELEASE_NO_UPDATE_AVAILABLE: Result := ELAUnknownErrorCodeException.Create(ErrorCode);
     LA_E_FILE_PATH: Result := ELAFilePathException.Create;
     LA_E_PRODUCT_FILE: Result := ELAProductFileException.Create;
     LA_E_PRODUCT_DATA: Result := ELAProductDataException.Create;
@@ -2434,13 +3294,18 @@ begin
     LA_E_TRIAL_ACTIVATION_METADATA_LIMIT: Result := ELATrialActivationMetadataLimitException.Create;
     LA_E_METADATA_KEY_NOT_FOUND: Result := ELAMetadataKeyNotFoundException.Create;
     LA_E_TIME_MODIFIED: Result := ELATimeModifiedException.Create;
+    LA_E_RELEASE_VERSION_FORMAT: Result := ELAReleaseVersionFormatException.Create;
+    LA_E_AUTHENTICATION_FAILED: Result := ELAAuthenticationFailedException.Create;
+    LA_E_METER_ATTRIBUTE_NOT_FOUND: Result := ELAMeterAttributeNotFoundException.Create;
+    LA_E_METER_ATTRIBUTE_USES_LIMIT_REACHED: Result := ELAMeterAttributeUsesLimitReachedException.Create;
+    LA_E_CUSTOM_FINGERPRINT_LENGTH: Result := ELACustomFingerprintLengthException.Create;
     LA_E_VM: Result := ELAVMException.Create;
     LA_E_COUNTRY: Result := ELACountryException.Create;
     LA_E_IP: Result := ELAIPException.Create;
+    LA_E_CONTAINER: Result := ELAContainerException.Create;
     LA_E_RATE_LIMIT: Result := ELARateLimitException.Create;
     LA_E_SERVER: Result := ELAServerException.Create;
     LA_E_CLIENT: Result := ELAClientException.Create;
-
   else
     Result := ELAUnknownErrorCodeException.Create(ErrorCode);
   end;
@@ -2594,7 +3459,7 @@ end;
 
 constructor ELASystemPermissionException.Create;
 begin
-  inherited Create('Insufficent system permissions');
+  inherited Create('Insufficient system permissions');
   FErrorCode := LA_E_SYSTEM_PERMISSION;
 end;
 
@@ -2614,7 +3479,7 @@ end;
 constructor ELATimeException.Create;
 begin
   inherited Create('The difference between the network time and the system time is ' +
-    'more than allowed clock offset.');
+    'more than allowed clock offset');
   FErrorCode := LA_E_TIME;
 end;
 
@@ -2751,6 +3616,37 @@ begin
   FErrorCode := LA_E_TIME_MODIFIED;
 end;
 
+constructor ELAReleaseVersionFormatException.Create;
+begin
+  inherited Create('Invalid version format');
+  FErrorCode := LA_E_RELEASE_VERSION_FORMAT;
+end;
+
+constructor ELAAuthenticationFailedException.Create;
+begin
+  inherited Create('Incorrect email or password');
+  FErrorCode := LA_E_AUTHENTICATION_FAILED;
+end;
+
+constructor ELAMeterAttributeNotFoundException.Create;
+begin
+  inherited Create('The meter attribute does not exist');
+  FErrorCode := LA_E_METER_ATTRIBUTE_NOT_FOUND;
+end;
+
+constructor ELAMeterAttributeUsesLimitReachedException.Create;
+begin
+  inherited Create('The meter attribute has reached it''s usage limit');
+  FErrorCode := LA_E_METER_ATTRIBUTE_USES_LIMIT_REACHED;
+end;
+
+constructor ELACustomFingerprintLengthException.Create;
+begin
+  inherited Create('Custom device fingerprint length is less than 64 characters ' +
+    'or more than 256 characters');
+  FErrorCode := LA_E_CUSTOM_FINGERPRINT_LENGTH;
+end;
+
 constructor ELAVMException.Create;
 begin
   inherited Create('Application is being run inside a virtual machine / hypervisor, ' +
@@ -2768,6 +3664,13 @@ constructor ELAIPException.Create;
 begin
   inherited Create('IP address is not allowed');
   FErrorCode := LA_E_IP;
+end;
+
+constructor ELAContainerException.Create;
+begin
+  inherited Create('Application is being run inside a container and ' +
+    'activation has been disallowed in the container');
+  FErrorCode := LA_E_CONTAINER;
 end;
 
 constructor ELARateLimitException.Create;
@@ -2789,9 +3692,12 @@ begin
 end;
 
 initialization
-  InitializeCriticalSection(LALicenseCallbackMutex);
+  InitializeCriticalSection(LALicenseCallbackMutex[lciSetLicenseCallback]);
+  InitializeCriticalSection(LALicenseCallbackMutex[lciCheckForReleaseUpdate]);
 finalization
+  try ResetCheckForReleaseUpdateCallback; except end;
   try ResetLicenseCallback; except end;
-  DeleteCriticalSection(LALicenseCallbackMutex);
+  DeleteCriticalSection(LALicenseCallbackMutex[lciCheckForReleaseUpdate]);
+  DeleteCriticalSection(LALicenseCallbackMutex[lciSetLicenseCallback]);
 end.
 
