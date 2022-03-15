@@ -239,6 +239,22 @@ procedure SetLicenseCallback(Callback: TLAClosureCallback; Synchronized: Boolean
 procedure ResetLicenseCallback;
 
 (*
+    PROCEDURE: SetActivationLeaseDuration()
+
+    PURPOSE: Sets the lease duration for the activation.
+
+    The activation lease duration is honoured when the allow client
+    lease duration property is enabled.
+
+    PARAMETERS:
+    * LeaseDuration - value of the lease duration.
+
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
+*)
+
+procedure SetActivationLeaseDuration(LeaseDuration: LongWord);
+
+(*
     PROCEDURE: SetActivationMetadata()
 
     PURPOSE: Sets the activation metadata.
@@ -363,6 +379,52 @@ procedure SetCryptlexHost(const Host: UnicodeString);
 *)
 
 function GetProductMetadata(const Key: UnicodeString): UnicodeString;
+
+(*
+    FUNCTION: GetProductVersionName()
+
+    PURPOSE: Gets the product version name.
+
+    RESULT: Product version name.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELAProductVersionNotLinkedException,
+    ELABufferSizeException
+*)
+
+function GetProductVersionName: UnicodeString;
+
+(*
+    FUNCTION: GetProductVersionDisplayName()
+
+    PURPOSE: Gets the product version display name.
+
+    RESULT: Product version display name.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELAProductVersionNotLinkedException,
+    ELABufferSizeException
+*)
+
+function GetProductVersionDisplayName: UnicodeString;
+
+(*
+    FUNCTION: GetProductVersionFeatureFlag()
+
+    PURPOSE: Gets the product version feature flag.
+
+    PARAMETERS:
+    * Name - name of the feature flag
+    * Data - variable that receives the value of the string
+
+    RESULT: Product version feature flag.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELAProductVersionNotLinkedException,
+    ELAFeatureFlagNotFoundException, ELABufferSizeException
+*)
+
+function GetProductVersionFeatureFlag(const Name: UnicodeString; out Data: UnicodeString): Boolean;
 
 (*
     FUNCTION: GetLicenseMetadata()
@@ -1518,6 +1580,23 @@ type
   end;
 
     (*
+        CODE: LA_E_PRODUCT_VERSION_NOT_LINKED
+        MESSAGE: No product version is linked with the license.
+    *)
+  ELAProductVersionNotLinkedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+    (*
+        CODE: LA_E_FEATURE_FLAG_NOT_FOUND
+        MESSAGE: The product version feature flag does not exist.
+    *)
+  ELAFeatureFlagNotFoundException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
         CODE: LA_E_VM
 
         MESSAGE: Application is being run inside a virtual machine / hypervisor,
@@ -2003,6 +2082,16 @@ const
   LA_E_CUSTOM_FINGERPRINT_LENGTH = TLAStatusCode(74);
 
     (*
+        CODE: LA_E_PRODUCT_VERSION_NOT_LINKED
+        MESSAGE: No product version is linked with the license.
+    *)
+  LA_E_PRODUCT_VERSION_NOT_LINKED = TLAStatusCode(75);
+    (*
+        CODE: LA_E_FEATURE_FLAG_NOT_FOUND
+        MESSAGE: The product version feature flag does not exist.
+    *)
+  LA_E_FEATURE_FLAG_NOT_FOUND = TLAStatusCode(76);
+    (*
         CODE: LA_E_VM
 
         MESSAGE: Application is being run inside a virtual machine / hypervisor,
@@ -2430,6 +2519,16 @@ begin
   end;
 end;
 
+function Thin_SetActivationLeaseDuration(leaseDuration: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetActivationLeaseDuration';
+
+procedure SetActivationLeaseDuration(LeaseDuration: LongWord);
+begin
+  if not ELAError.CheckOKFail(Thin_SetActivationLeaseDuration(LeaseDuration)) then
+    raise
+    ELAFailException.Create('Failed to set the lease duration for the activation');
+end;
+
 function Thin_SetActivationMetadata(const key, value: PWideChar): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'SetActivationMetadata';
 
@@ -2528,6 +2627,114 @@ begin
   if not Try256(Result) then TryHigh(Result);
   if not ELAError.CheckOKFail(ErrorCode) then
     raise ELAFailException.CreateFmt('Failed to get the product metadata with key %s', [Key]);
+end;
+
+function Thin_GetProductVersionName(out name; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetProductVersionName';
+
+function GetProductVersionName: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetProductVersionName(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetProductVersionName(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the product version name');
+end;
+
+function Thin_GetProductVersionDisplayName(out displayName; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetProductVersionDisplayName';
+
+function GetProductVersionDisplayName: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetProductVersionDisplayName(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetProductVersionDisplayName(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the product version display name');
+end;
+
+function Thin_GetProductVersionFeatureFlag(const name: PWideChar; out enabled: LongWord; out data; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetProductVersionFeatureFlag';
+
+function GetProductVersionFeatureFlag(const Name: UnicodeString; out Data: UnicodeString): Boolean;
+var
+  Enabled: LongWord;
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetProductVersionFeatureFlag(PWideChar(Name), Enabled, Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetProductVersionFeatureFlag(PWideChar(Name), Enabled, PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  Enabled := 0;
+  if not Try256(Data) then TryHigh(Data);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the product version feature flag');
+  Result := Enabled <> 0;
 end;
 
 function Thin_GetLicenseMetadata(const key: UnicodeString; out value; length: LongWord): TLAStatusCode; cdecl;
@@ -3299,6 +3506,8 @@ begin
     LA_E_METER_ATTRIBUTE_NOT_FOUND: Result := ELAMeterAttributeNotFoundException.Create;
     LA_E_METER_ATTRIBUTE_USES_LIMIT_REACHED: Result := ELAMeterAttributeUsesLimitReachedException.Create;
     LA_E_CUSTOM_FINGERPRINT_LENGTH: Result := ELACustomFingerprintLengthException.Create;
+    LA_E_PRODUCT_VERSION_NOT_LINKED: Result := ELAProductVersionNotLinkedException.Create;
+    LA_E_FEATURE_FLAG_NOT_FOUND: Result := ELAFeatureFlagNotFoundException.Create;
     LA_E_VM: Result := ELAVMException.Create;
     LA_E_COUNTRY: Result := ELACountryException.Create;
     LA_E_IP: Result := ELAIPException.Create;
@@ -3645,6 +3854,18 @@ begin
   inherited Create('Custom device fingerprint length is less than 64 characters ' +
     'or more than 256 characters');
   FErrorCode := LA_E_CUSTOM_FINGERPRINT_LENGTH;
+end;
+
+constructor ELAProductVersionNotLinkedException.Create;
+begin
+  inherited Create('No product version is linked with the license');
+  FErrorCode := LA_E_PRODUCT_VERSION_NOT_LINKED;
+end;
+
+constructor ELAFeatureFlagNotFoundException.Create;
+begin
+  inherited Create('The product version feature flag does not exist');
+  FErrorCode := LA_E_FEATURE_FLAG_NOT_FOUND;
 end;
 
 constructor ELAVMException.Create;
