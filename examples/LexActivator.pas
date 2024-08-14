@@ -176,6 +176,110 @@ procedure SetCustomDeviceFingerprint(const Fingerprint: UnicodeString);
 procedure SetLicenseKey(const LicenseKey: UnicodeString);
 
 (*
+    PROCEDURE: SetReleaseVersion()
+
+    PURPOSE: Sets the current release version of your application.
+    The release version appears along with the activation details in dashboard.
+
+    PARAMETERS:
+    * ReleaseVersion - string in following allowed formats: x.x, x.x.x, x.x.x.x.
+
+    EXCEPTIONS: ELAProductIdException, ELAReleaseVersionFormatException
+*)
+
+procedure SetReleaseVersion(const ReleaseVersion: UnicodeString);
+
+(*
+    PROCEDURE: SetReleasePlatform()
+
+    PURPOSE: Sets the release platform e.g. windows, macos, linux
+    The release platform appears along with the activation details in dashboard.
+
+    PARAMETERS:
+    * ReleasePlatform - release platform e.g. windows, macos, linux.
+
+    EXCEPTIONS: ELAProductIdException, ELAReleaseVersionFormatException
+*)
+
+procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
+
+(*
+    PROCEDURE: SetReleaseChannel()
+
+    PURPOSE: Sets the release channel e.g. stable, beta.
+    The release channel appears along with the activation details in dashboard.
+
+    PARAMETERS:
+    * ReleaseChannel - release channel e.g. stable
+
+    EXCEPTIONS: ELAProductIdException,
+*)
+
+procedure SetReleaseChannel(const ReleaseChannel: UnicodeString);
+
+(*
+    PROCEDURE: SetReleasePublishedDate()
+
+    PURPOSE: Sets the release published date of your application.
+
+    PARAMETERS:
+    * ReleasePublishedDate - unix timestamp of release published date.
+
+    EXCEPTIONS: ELAProductIdException
+*)
+
+procedure SetReleasePublishedDate(ReleasePublishedDate: LongWord);
+
+(*
+    PROCEDURE: SetDebugMode()
+
+    PURPOSE: Enables network logs.
+
+    This function should be used for network testing only in case of network errors.
+    By default logging is disabled.
+
+    This function generates the lexactivator-logs.log file in the same directory
+    where the application is running.
+
+    PARAMETERS:
+    * Enable - False or True to disable or enable logging.
+
+    EXCEPTIONS: ELAProductIdException
+*)
+
+procedure SetDebugMode(Enable: Boolean);
+
+(*
+    PROCEDURE: SetCacheMode()
+
+    PURPOSE: Enables or disables in-memory caching for LexActivator. This function is designed to control caching
+    behavior to suit specific application requirements. Caching is enabled by default to enhance performance.
+
+    Disabling caching is recommended in environments where multiple processes access the same license on a
+    single machine and require real-time updates to the license state.
+
+    PARAMETERS:
+    * Enable - False or True to disable or enable in-memory caching.
+
+    EXCEPTIONS: ELAProductIdException
+*)
+
+procedure SetCacheMode(Enable: Boolean);
+
+(*
+    PROCEDURE: SetTwoFactorAuthenticationCode()
+
+    PURPOSE: Sets the two-factor authentication code for the user authentication.
+
+    PARAMETERS:
+    * TwoFactorAuthenticationCode - the 2FA code.
+
+    EXCEPTIONS: ELAProductIdException
+*)
+
+procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: UnicodeString);
+
+(*
     PROCEDURE: SetLicenseUserCredential()
 
     PURPOSE: Sets the license user email and password for authentication.
@@ -187,7 +291,7 @@ procedure SetLicenseKey(const LicenseKey: UnicodeString);
     * Email - user email address.
     * Password - user password.
 
-    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
+    EXCEPTIONS: ELAProductIdException
 *)
 
 procedure SetLicenseUserCredential(const Email, Password: UnicodeString);
@@ -2330,6 +2434,76 @@ begin
   if not ELAError.CheckOKFail(Thin_SetLicenseKey(PWideChar(LicenseKey))) then
     raise
     ELAFailException.Create('Failed to set the license key');
+end;
+
+function Thin_SetReleaseVersion(const releaseVersion: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetReleaseVersion';
+
+procedure SetReleaseVersion(const ReleaseVersion: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetReleaseVersion(PWideChar(ReleaseVersion))) then
+    raise
+    ELAFailException.Create('Failed to set release version');
+end;
+
+function Thin_SetReleasePlatform(const releasePlatform: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetReleasePlatform';
+
+procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetReleasePlatform(PWideChar(ReleasePlatform))) then
+    raise
+    ELAFailException.Create('Failed to set release platform');
+end;
+
+function Thin_SetReleaseChannel(const releaseChannel: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetReleaseChannel';
+
+procedure SetReleaseChannel(const ReleaseChannel: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetReleaseChannel(PWideChar(ReleaseChannel))) then
+    raise
+    ELAFailException.Create('Failed to set release channel');
+end;
+
+function Thin_SetReleasePublishedDate(releasePublishedDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetReleasePublishedDate';
+
+procedure SetReleasePublishedDate(ReleasePublishedDate: LongWord);
+begin
+  if not ELAError.CheckOKFail(Thin_SetReleasePublishedDate(ReleasePublishedDate)) then
+    raise
+    ELAFailException.Create('Failed to set the release publish date');
+end;
+
+function Thin_SetDebugMode(enable: Boolean): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetDebugMode';
+
+procedure SetDebugMode(Enable: Boolean);
+begin
+  if not ELAError.CheckOKFail(Thin_SetDebugMode(Enable)) then
+    raise
+    ELAFailException.Create('Failed to set the debug mode');
+end;
+
+function Thin_SetCacheMode(enable: Boolean): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetCacheMode';
+
+procedure SetCacheMode(Enable: Boolean);
+begin
+  if not ELAError.CheckOKFail(Thin_SetCacheMode(Enable)) then
+    raise
+    ELAFailException.Create('Failed to set the cache mode');
+end;
+
+function Thin_SetTwoFactorAuthenticationCode(const twoFactorAuthenticationCode: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetTwoFactorAuthenticationCode';
+
+procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetTwoFactorAuthenticationCode(PWideChar(TwoFactorAuthenticationCode))) then
+    raise
+    ELAFailException.Create('Failed to set the two factor authentication code');
 end;
 
 function Thin_SetLicenseUserCredential(const email, password: PWideChar): TLAStatusCode; cdecl;
