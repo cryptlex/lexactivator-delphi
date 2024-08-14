@@ -987,6 +987,37 @@ function ActivateLicense: TLAKeyStatus;
 function ActivateLicenseOffline(const FilePath: UnicodeString): TLAKeyStatus;
 
 (*
+    FUNCTION: AuthenticateUser()
+
+    PURPOSE: It sends the request to the Cryptlex servers to authenticate the user.
+
+    PARAMETERS:
+    * Email - user email address.
+    * Password - user password.
+
+    RETURN CODES: lkOK, lkExpired, lkFail
+
+    EXCEPTIONS: ELAProductIdException
+*)
+
+function AuthenticateUser(const Email , Password: UnicodeString): TLAKeyStatus;
+
+(*
+    FUNCTION: AuthenticateUserWithIdToken()
+
+    PURPOSE: Authenticates the user via OIDC Id token.
+
+    PARAMETERS:
+    * IdToken - The id token obtained from the OIDC provider.
+
+    RETURN CODES: lkOK, lkExpired, lkFail
+
+    EXCEPTIONS: ELAProductIdException
+*)
+
+function AuthenticateUserWithIdToken(const Token: UnicodeString): TLAKeyStatus;
+
+(*
     PROCEDURE: GenerateOfflineActivationRequest()
 
     PURPOSE: Generates the offline activation request needed for generating
@@ -3820,6 +3851,22 @@ function Thin_ActivateLicenseOffline(const filePath: PWideChar): TLAStatusCode; 
 function ActivateLicenseOffline(const FilePath: UnicodeString): TLAKeyStatus;
 begin
   Result := ELAError.CheckKeyStatus(Thin_ActivateLicenseOffline(PWideChar(FilePath)));
+end;
+
+function Thin_AuthenticateUser(const email , password : unicodestring): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'AuthenticateUser';
+
+function AuthenticateUser(const Email , Password : unicodestring): TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_AuthenticateUser(PWideChar(Email),PWideChar(Password)));
+end;
+
+function Thin_AuthenticateUserWithIdToken(const token : unicodestring): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'AuthenticateUserWithIdToken';
+
+function AuthenticateUserWithIdToken(const Token : unicodestring): TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_AuthenticateUser(PWideChar(Token)));
 end;
 
 function Thin_GenerateOfflineActivationRequest(const filePath: PWideChar): TLAStatusCode; cdecl;
