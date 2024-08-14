@@ -500,13 +500,132 @@ function GetLicenseAllowedActivations: LongWord;
 function GetLicenseTotalActivations: LongWord;
 
 (*
+    FUNCTION: GetLicenseTotalDeactivations()
+
+    PURPOSE: Gets the total deactivations of the license.
+
+    RESULT: Total deactivations of the license.
+
+    RETURN CODES: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
+*)
+
+function GetLicenseTotalDeactivations: LongWord;
+
+(*
+    FUNCTION: GetLicenseAllowedDeactivations()
+
+    PURPOSE: Gets the allowed deactivations of the license.
+
+    RESULT: Allowed deactivations of the license.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
+*)
+
+function GetLicenseAllowedDeactivations: LongWord;
+
+(*
+    FUNCTION: GetLicenseCreationDate()
+
+    PURPOSE: Gets the license creation date timestamp.
+
+    RESULT: License creation date timestamp.
+
+    RETURN CODES: ELAFailException, ELAProductIdException, ELATimeException, ELALicenseKeyException
+    ELATimeModifiedException
+*)
+
+function GetLicenseCreationDate: TDateTime;
+
+(*
+    FUNCTION: GetLicenseActivationDate()
+
+    PURPOSE: Gets the activation creation date timestamp.
+
+    RESULT: Activation creation date timestamp.
+
+    RETURN CODES: ELAFailException, ELAProductIdException, ELATimeException, ELALicenseKeyException
+    ELATimeModifiedException
+*)
+
+function GetLicenseActivationDate: TDateTime;
+
+(*
+    FUNCTION: GetLicenseMaintenanceExpiryDate()
+
+    PURPOSE: Gets the license maintenance expiry date timestamp.
+
+    RESULT: Maintenance expiry date timestamp.
+
+    RETURN CODES: ELAFailException, ELAProductIdException, ELATimeException, ELALicenseKeyException
+    ELATimeModifiedException
+*)
+
+function GetLicenseMaintenanceExpiryDate: TDateTime;
+
+(*
+    FUNCTION: GetLicenseMaxAllowedReleaseVersion()
+
+    PURPOSE: Gets the maximum allowed release version of the license.
+
+    RESULT: Max allowed release version.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELAProductVersionNotLinkedException,
+    ELABufferSizeException
+*)
+
+function GetLicenseMaxAllowedReleaseVersion: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseOrganizationName()
+
+    PURPOSE: Gets the organization name associated with the license.
+
+    RESULT: Organization name.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELAProductVersionNotLinkedException,
+    ELABufferSizeException
+*)
+
+function GetLicenseOrganizationName: UnicodeString;
+
+(*
+    FUNCTION: GetActivationId()
+
+    PURPOSE: Gets the activation id.
+
+    RESULT: Activation id.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetActivationId: UnicodeString;
+
+(*
+    FUNCTION: GetActivationMode()
+
+    PURPOSE: Gets the mode of activation (online or offline).
+
+    RESULT: Activation mode.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetActivationMode: UnicodeString;
+
+(*
     FUNCTION: GetLicenseExpiryDate()
 
     PURPOSE: Gets the license expiry date timestamp.
 
     RESULT: License expiry date timestamp
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException
     ELATimeException, ELATimeModifiedException
 *)
 
@@ -2840,6 +2959,218 @@ begin
     ELAFailException.Create('Failed to get the total activations of the license');
 end;
 
+function Thin_GetLicenseAllowedDeactivations(out allowedDeactivations: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseAllowedDeactivations';
+
+function GetLicenseAllowedDeactivations: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseAllowedDeactivations(Result)) then
+    raise
+    ELAFailException.Create('Failed to get the allowed deactivations of the license');
+end;
+
+function Thin_GetLicenseTotalDeactivations(out totalDeactivations: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseTotalDeactivations';
+
+function GetLicenseTotalDeactivations: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseTotalDeactivations(Result)) then
+    raise
+    ELAFailException.Create('Failed to get the total deactivations of the license');
+end;
+
+function Thin_GetLicenseCreationDate(out creationDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseCreationDate';
+
+function GetLicenseCreationDate: TDateTime;
+var
+  creationDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseCreationDate(creationDate)) then
+    raise
+    ELAFailException.Create('Failed to get the license creation date');
+   Result := UnixToDateTime(creationDate);
+end;
+
+function Thin_GetLicenseActivationDate(out activationDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseActivationDate';
+
+function GetLicenseActivationDate: TDateTime;
+var
+  activationDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseActivationDate(activationDate)) then
+    raise
+    ELAFailException.Create('Failed to get the activation creation date');
+   Result := UnixToDateTime(activationDate);
+end;
+
+function Thin_GetLicenseMaintenanceExpiryDate(out maintenanceExpiryDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseMaintenanceExpiryDate';
+
+function GetLicenseMaintenanceExpiryDate: TDateTime;
+var
+  maintenanceExpiryDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseMaintenanceExpiryDate(maintenanceExpiryDate)) then
+    raise
+    ELAFailException.Create('Failed to get the maintenance expiry date');
+   Result := UnixToDateTime(maintenanceExpiryDate);
+end;
+
+function Thin_GetLicenseMaxAllowedReleaseVersion(out releaseVersion; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseMaxAllowedReleaseVersion';
+
+function GetLicenseMaxAllowedReleaseVersion: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseMaxAllowedReleaseVersion(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseMaxAllowedReleaseVersion(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the max allowed release version');
+end;
+
+function Thin_GetLicenseOrganizationName(out organizationName; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseOrganizationName';
+
+function GetLicenseOrganizationName: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseOrganizationName(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseOrganizationName(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get organization name');
+end;
+
+function Thin_GetActivationId(out activationId; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetActivationId';
+
+function GetActivationId: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetActivationId(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetActivationId(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get activation id');
+end;
+function Thin_GetActivationMode(out initialMode; initialModeLength: LongWord; out currentMode; currentModeLength: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetActivationMode';
+
+function GetActivationMode: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  InitialMode, CurrentMode: UnicodeString;
+
+  function Try256(out InitialResult, CurrentResult: UnicodeString): Boolean;
+  var
+    InitialBuffer, CurrentBuffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetActivationMode(InitialBuffer, Length(InitialBuffer), CurrentBuffer, Length(CurrentBuffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then
+    begin
+      InitialResult := InitialBuffer;
+      CurrentResult := CurrentBuffer;
+    end;
+  end;
+
+  function TryHigh(out InitialResult, CurrentResult: UnicodeString): Boolean;
+  var
+    InitialBuffer, CurrentBuffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(InitialBuffer, Size);
+      SetLength(CurrentBuffer, Size);
+      ErrorCode := Thin_GetActivationMode(PWideChar(InitialBuffer)^, Size, PWideChar(CurrentBuffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then
+    begin
+      InitialResult := PWideChar(InitialBuffer);
+      CurrentResult := PWideChar(CurrentBuffer);
+    end;
+  end;
+
+begin
+  if not Try256(InitialMode, CurrentMode) then TryHigh(InitialMode, CurrentMode);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get activation mode');
+
+  Result := 'Initial Mode: ' + InitialMode + ', Current Mode: ' + CurrentMode;
+end;
+
 function Thin_GetLicenseExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseExpiryDate';
 
@@ -3921,4 +4252,3 @@ finalization
   DeleteCriticalSection(LALicenseCallbackMutex[lciCheckForReleaseUpdate]);
   DeleteCriticalSection(LALicenseCallbackMutex[lciSetLicenseCallback]);
 end.
-
