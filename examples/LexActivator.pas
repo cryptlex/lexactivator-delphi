@@ -198,7 +198,7 @@ procedure SetReleaseVersion(const ReleaseVersion: UnicodeString);
     PARAMETERS:
     * ReleasePlatform - release platform e.g. windows, macos, linux.
 
-    EXCEPTIONS: ELAProductIdException, ELAReleaseVersionFormatException
+    EXCEPTIONS: ELAProductIdException, ELAReleaseVersionFormatException, ELAReleasePlatformLengthException
 *)
 
 procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
@@ -212,7 +212,7 @@ procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
     PARAMETERS:
     * ReleaseChannel - release channel e.g. stable
 
-    EXCEPTIONS: ELAProductIdException,
+    EXCEPTIONS: ELAProductIdException, ELAReleaseChannelLengthException
 *)
 
 procedure SetReleaseChannel(const ReleaseChannel: UnicodeString);
@@ -291,7 +291,7 @@ procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: Unic
     * Email - user email address.
     * Password - user password.
 
-    EXCEPTIONS: ELAProductIdException
+    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeInvalid
 *)
 
 procedure SetLicenseUserCredential(const Email, Password: UnicodeString);
@@ -1849,6 +1849,22 @@ type
   public
     constructor Create;
   end;
+    (*
+        CODE: LA_E_RELEASE_PLATFORM_LENGTH
+        MESSAGE: Release platform length is more than 256 characters.
+    *)
+  ELAReleasePlatformLengthException = class(ELAException)
+  public
+    constructor Create;
+  end;
+    (*
+        CODE: LA_E_RELEASE_Channel_LENGTH
+        MESSAGE: Release channel length is more than 256 characters.
+    *)
+  ELAReleaseChannelLengthException = class(ELAException)
+  public
+    constructor Create;
+  end;
 
     (*
         CODE: LA_E_VM
@@ -1892,6 +1908,17 @@ type
     *)
 
   ELAContainerException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID
+
+        MESSAGE: The two-factor authentication code provided by the user is invalid.
+    *)
+
+  ELATwoFactorAuthenticationCodeInvalid = class(ELAException)
   public
     constructor Create;
   end;
@@ -2346,6 +2373,16 @@ const
     *)
   LA_E_FEATURE_FLAG_NOT_FOUND = TLAStatusCode(76);
     (*
+        CODE: LA_E_RELEASE_PLATFORM_LENGTH
+        MESSAGE: Release platform length is more than 256 characters.
+    *)
+  LA_E_RELEASE_PLATFORM_LENGTH = TLAStatusCode(78);
+    (*
+        CODE: LA_E_RELEASE_CHANNEL_LENGTH
+        MESSAGE: Release channel length is more than 256 characters.
+    *)
+  LA_E_RELEASE_CHANNEL_LENGTH = TLAStatusCode(79);
+    (*
         CODE: LA_E_VM
 
         MESSAGE: Application is being run inside a virtual machine / hypervisor,
@@ -2378,6 +2415,14 @@ const
     *)
 
   LA_E_CONTAINER = TLAStatusCode(83);
+
+    (*
+        CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID
+
+        MESSAGE: The two-factor authentication code provided by the user is invalid.
+    *)
+
+  LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID = TLAStatusCode(89);
 
     (*
         CODE: LA_E_RATE_LIMIT
@@ -3866,7 +3911,7 @@ function Thin_AuthenticateUserWithIdToken(const token : unicodestring): TLAStatu
 
 function AuthenticateUserWithIdToken(const Token : unicodestring): TLAKeyStatus;
 begin
-  Result := ELAError.CheckKeyStatus(Thin_AuthenticateUser(PWideChar(Token)));
+  Result := ELAError.CheckKeyStatus(Thin_AuthenticateUserWithIdToken(PWideChar(Token)));
 end;
 
 function Thin_GenerateOfflineActivationRequest(const filePath: PWideChar): TLAStatusCode; cdecl;
@@ -4060,10 +4105,13 @@ begin
     LA_E_CUSTOM_FINGERPRINT_LENGTH: Result := ELACustomFingerprintLengthException.Create;
     LA_E_PRODUCT_VERSION_NOT_LINKED: Result := ELAProductVersionNotLinkedException.Create;
     LA_E_FEATURE_FLAG_NOT_FOUND: Result := ELAFeatureFlagNotFoundException.Create;
+    LA_E_RELEASE_PLATFORM_LENGTH: Result := ELAReleasePlatformLengthException.Create;
+    LA_E_RELEASE_CHANNEL_LENGTH: Result := ELAReleaseChannelLengthException.Create;
     LA_E_VM: Result := ELAVMException.Create;
     LA_E_COUNTRY: Result := ELACountryException.Create;
     LA_E_IP: Result := ELAIPException.Create;
     LA_E_CONTAINER: Result := ELAContainerException.Create;
+    LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID: Result := ELATwoFactorAuthenticationCodeInvalid.Create;
     LA_E_RATE_LIMIT: Result := ELARateLimitException.Create;
     LA_E_SERVER: Result := ELAServerException.Create;
     LA_E_CLIENT: Result := ELAClientException.Create;
@@ -4420,6 +4468,18 @@ begin
   FErrorCode := LA_E_FEATURE_FLAG_NOT_FOUND;
 end;
 
+constructor ELAReleasePlatformLengthException.Create;
+begin
+  inherited Create('Release platform length is more than 256 characters..');
+  FErrorCode := LA_E_RELEASE_PLATFORM_LENGTH;
+end;
+
+constructor ELAReleaseChannelLengthException.Create;
+begin
+  inherited Create('Release channel length is more than 256 characters..');
+  FErrorCode := LA_E_RELEASE_CHANNEL_LENGTH;
+end;
+
 constructor ELAVMException.Create;
 begin
   inherited Create('Application is being run inside a virtual machine / hypervisor, ' +
@@ -4444,6 +4504,12 @@ begin
   inherited Create('Application is being run inside a container and ' +
     'activation has been disallowed in the container');
   FErrorCode := LA_E_CONTAINER;
+end;
+
+constructor ELATwoFactorAuthenticationCodeInvalid.Create;
+begin
+  inherited Create('The two-factor authentication code provided by the user is invalid.');
+  FErrorCode := LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID;
 end;
 
 constructor ELARateLimitException.Create;
