@@ -48,7 +48,7 @@ type
     );
 
 function LAFlagsToString(Item: TLAFlags): string;
-function LAKeyStatusToString(Item: TLAKeyStatus): string;    
+function LAKeyStatusToString(Item: TLAKeyStatus): string;
 
 (*
     PROCEDURE: SetProductFile()
@@ -242,12 +242,12 @@ procedure SetReleasePublishedDate(ReleasePublishedDate: LongWord);
     where the application is running.
 
     PARAMETERS:
-    * Enable - False or True to disable or enable logging.
+    * Enable - 0 or 1 to disable or enable logging.
 
     EXCEPTIONS: ELAProductIdException
 *)
 
-procedure SetDebugMode(Enable: Boolean);
+procedure SetDebugMode(Enable: LongWord);
 
 (*
     PROCEDURE: SetCacheMode()
@@ -351,12 +351,12 @@ procedure ResetLicenseCallback;
     lease duration property is enabled.
 
     PARAMETERS:
-    * LeaseDuration - value of the lease duration.
+    * LeaseDuration - value of the lease duration. A value of -1 indicates unlimited lease duration.
 
     EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
 *)
 
-procedure SetActivationLeaseDuration(LeaseDuration: LongWord);
+procedure SetActivationLeaseDuration(LeaseDuration: Int64);
 
 (*
     PROCEDURE: SetActivationMetadata()
@@ -553,7 +553,7 @@ function GetLicenseMetadata(const Key: UnicodeString): UnicodeString;
 
     PARAMETERS:
     * Name - name of the meter attribute
-    * AllowedUses - the integer that receives the value
+    * AllowedUses - the integer that receives the value. A value of -1 indicates unlimited allowed uses.
     * TotalUses - the integer that receives the value
     * GrossUses - the integer that receives the value
 
@@ -562,7 +562,7 @@ function GetLicenseMetadata(const Key: UnicodeString): UnicodeString;
 *)
 
 procedure GetLicenseMeterAttribute
-  (const Name: UnicodeString; out AllowedUses, TotalUses, GrossUses: LongWord);
+  (const Name: UnicodeString; out AllowedUses: Int64; TotalUses, GrossUses: LongWord);
 
 (*
     FUNCTION: GetLicenseKey()
@@ -582,13 +582,13 @@ function GetLicenseKey: UnicodeString;
 
     PURPOSE: Gets the allowed activations of the license.
 
-    RESULT: Allowed activations of the license.
+    RESULT: Allowed activations of the license. A value of -1 indicates unlimited number of activations.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
     ELATimeModifiedException
 *)
 
-function GetLicenseAllowedActivations: LongWord;
+function GetLicenseAllowedActivations: Int64;
 
 (*
     FUNCTION: GetLicenseTotalActivations()
@@ -621,13 +621,13 @@ function GetLicenseTotalDeactivations: LongWord;
 
     PURPOSE: Gets the allowed deactivations of the license.
 
-    RESULT: Allowed deactivations of the license.
+    RESULT: Allowed deactivations of the license. A value of -1 indicates unlimited number of deactivations.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
     ELATimeModifiedException
 *)
 
-function GetLicenseAllowedDeactivations: LongWord;
+function GetLicenseAllowedDeactivations: Int64;
 
 (*
     FUNCTION: GetLicenseCreationDate()
@@ -726,6 +726,7 @@ function GetActivationMode: UnicodeString;
     FUNCTION: GetLicenseExpiryDate()
 
     PURPOSE: Gets the license expiry date timestamp.
+    A value of 0 indicates it has no expiry i.e a lifetime license.
 
     RESULT: License expiry date timestamp
 
@@ -997,7 +998,7 @@ function ActivateLicenseOffline(const FilePath: UnicodeString): TLAKeyStatus;
 
     RETURN CODES: lkOK, lkExpired, lkFail
 
-    EXCEPTIONS: ELAProductIdException
+    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeMissing
 *)
 
 function AuthenticateUser(const Email , Password: UnicodeString): TLAKeyStatus;
@@ -1913,6 +1914,17 @@ type
   end;
 
     (*
+        CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING
+
+        MESSAGE: The two-factor authentication code for the user authentication is missing.
+    *)
+
+  ELATwoFactorAuthenticationCodeMissing = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
         CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID
 
         MESSAGE: The two-factor authentication code provided by the user is invalid.
@@ -2417,6 +2429,14 @@ const
   LA_E_CONTAINER = TLAStatusCode(83);
 
     (*
+        CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING
+
+        MESSAGE: The two-factor authentication code for the user authentication is missing.
+    *)
+
+  LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING = TLAStatusCode(88);
+
+    (*
         CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID
 
         MESSAGE: The two-factor authentication code provided by the user is invalid.
@@ -2552,10 +2572,10 @@ begin
     ELAFailException.Create('Failed to set the release publish date');
 end;
 
-function Thin_SetDebugMode(enable: Boolean): TLAStatusCode; cdecl;
+function Thin_SetDebugMode(enable: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'SetDebugMode';
 
-procedure SetDebugMode(Enable: Boolean);
+procedure SetDebugMode(Enable: LongWord);
 begin
   if not ELAError.CheckOKFail(Thin_SetDebugMode(Enable)) then
     raise
@@ -2888,10 +2908,10 @@ begin
   end;
 end;
 
-function Thin_SetActivationLeaseDuration(leaseDuration: LongWord): TLAStatusCode; cdecl;
+function Thin_SetActivationLeaseDuration(leaseDuration: Int64): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'SetActivationLeaseDuration';
 
-procedure SetActivationLeaseDuration(LeaseDuration: LongWord);
+procedure SetActivationLeaseDuration(LeaseDuration: Int64);
 begin
   if not ELAError.CheckOKFail(Thin_SetActivationLeaseDuration(LeaseDuration)) then
     raise
@@ -3142,11 +3162,11 @@ begin
 end;
 
 function Thin_GetLicenseMeterAttribute
-  (const name: PWideChar; out allowedUses, totalUses, grossUses: LongWord): TLAStatusCode; cdecl;
+  (const name: PWideChar; out allowedUses: Int64; out totalUses, grossUses: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseMeterAttribute';
 
 procedure GetLicenseMeterAttribute
-  (const Name: UnicodeString; out AllowedUses, TotalUses, GrossUses: LongWord);
+  (const Name: UnicodeString; out AllowedUses: Int64; TotalUses, GrossUses: LongWord);
 begin
   if not ELAError.CheckOKFail(Thin_GetLicenseMeterAttribute
     (PWideChar(Name), AllowedUses, TotalUses, GrossUses)) then
@@ -3189,10 +3209,10 @@ begin
     raise ELAFailException.Create('Failed to get the license key used for activation');
 end;
 
-function Thin_GetLicenseAllowedActivations(out allowedActivations: LongWord): TLAStatusCode; cdecl;
+function Thin_GetLicenseAllowedActivations(out allowedActivations: Int64): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseAllowedActivations';
 
-function GetLicenseAllowedActivations: LongWord;
+function GetLicenseAllowedActivations: Int64;
 begin
   if not ELAError.CheckOKFail(Thin_GetLicenseAllowedActivations(Result)) then
     raise
@@ -3209,10 +3229,10 @@ begin
     ELAFailException.Create('Failed to get the total activations of the license');
 end;
 
-function Thin_GetLicenseAllowedDeactivations(out allowedDeactivations: LongWord): TLAStatusCode; cdecl;
+function Thin_GetLicenseAllowedDeactivations(out allowedDeactivations: Int64): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseAllowedDeactivations';
 
-function GetLicenseAllowedDeactivations: LongWord;
+function GetLicenseAllowedDeactivations: Int64;
 begin
   if not ELAError.CheckOKFail(Thin_GetLicenseAllowedDeactivations(Result)) then
     raise
@@ -4111,6 +4131,7 @@ begin
     LA_E_COUNTRY: Result := ELACountryException.Create;
     LA_E_IP: Result := ELAIPException.Create;
     LA_E_CONTAINER: Result := ELAContainerException.Create;
+    LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING: Result := ELATwoFactorAuthenticationCodeMissing.Create;
     LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID: Result := ELATwoFactorAuthenticationCodeInvalid.Create;
     LA_E_RATE_LIMIT: Result := ELARateLimitException.Create;
     LA_E_SERVER: Result := ELAServerException.Create;
@@ -4504,6 +4525,12 @@ begin
   inherited Create('Application is being run inside a container and ' +
     'activation has been disallowed in the container');
   FErrorCode := LA_E_CONTAINER;
+end;
+
+constructor ELATwoFactorAuthenticationCodeMissing.Create;
+begin
+  inherited Create('The two-factor authentication code for the user authentication is missing.');
+  FErrorCode := LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING;
 end;
 
 constructor ELATwoFactorAuthenticationCodeInvalid.Create;
