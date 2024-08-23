@@ -291,7 +291,7 @@ procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: Unic
     * Email - user email address.
     * Password - user password.
 
-    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeInvalid
+    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeInvalidException
 *)
 
 procedure SetLicenseUserCredential(const Email, Password: UnicodeString);
@@ -562,7 +562,7 @@ function GetLicenseMetadata(const Key: UnicodeString): UnicodeString;
 *)
 
 procedure GetLicenseMeterAttribute
-  (const Name: UnicodeString; out AllowedUses: Int64; TotalUses, GrossUses: LongWord);
+  (const Name: UnicodeString; out AllowedUses: Int64; TotalUses, GrossUses: UInt64);
 
 (*
     FUNCTION: GetLicenseKey()
@@ -998,7 +998,7 @@ function ActivateLicenseOffline(const FilePath: UnicodeString): TLAKeyStatus;
 
     RETURN CODES: lkOK, lkExpired, lkFail
 
-    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeMissing
+    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeMissingException
 *)
 
 function AuthenticateUser(const Email , Password: UnicodeString): TLAKeyStatus;
@@ -1919,7 +1919,7 @@ type
         MESSAGE: The two-factor authentication code for the user authentication is missing.
     *)
 
-  ELATwoFactorAuthenticationCodeMissing = class(ELAException)
+  ELATwoFactorAuthenticationCodeMissingException = class(ELAException)
   public
     constructor Create;
   end;
@@ -1930,7 +1930,7 @@ type
         MESSAGE: The two-factor authentication code provided by the user is invalid.
     *)
 
-  ELATwoFactorAuthenticationCodeInvalid = class(ELAException)
+  ELATwoFactorAuthenticationCodeInvalidException = class(ELAException)
   public
     constructor Create;
   end;
@@ -3162,11 +3162,11 @@ begin
 end;
 
 function Thin_GetLicenseMeterAttribute
-  (const name: PWideChar; out allowedUses: Int64; out totalUses, grossUses: LongWord): TLAStatusCode; cdecl;
+  (const name: PWideChar; out allowedUses: Int64; out totalUses, grossUses: UInt64): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseMeterAttribute';
 
 procedure GetLicenseMeterAttribute
-  (const Name: UnicodeString; out AllowedUses: Int64; TotalUses, GrossUses: LongWord);
+  (const Name: UnicodeString; out AllowedUses: Int64; TotalUses, GrossUses: UInt64);
 begin
   if not ELAError.CheckOKFail(Thin_GetLicenseMeterAttribute
     (PWideChar(Name), AllowedUses, TotalUses, GrossUses)) then
@@ -3918,7 +3918,7 @@ begin
   Result := ELAError.CheckKeyStatus(Thin_ActivateLicenseOffline(PWideChar(FilePath)));
 end;
 
-function Thin_AuthenticateUser(const email , password : unicodestring): TLAStatusCode; cdecl;
+function Thin_AuthenticateUser(const email , password : PWideChar): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'AuthenticateUser';
 
 function AuthenticateUser(const Email , Password : unicodestring): TLAKeyStatus;
@@ -3926,7 +3926,7 @@ begin
   Result := ELAError.CheckKeyStatus(Thin_AuthenticateUser(PWideChar(Email),PWideChar(Password)));
 end;
 
-function Thin_AuthenticateUserWithIdToken(const token : unicodestring): TLAStatusCode; cdecl;
+function Thin_AuthenticateUserWithIdToken(const token : PWideChar): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'AuthenticateUserWithIdToken';
 
 function AuthenticateUserWithIdToken(const Token : unicodestring): TLAKeyStatus;
@@ -4131,8 +4131,8 @@ begin
     LA_E_COUNTRY: Result := ELACountryException.Create;
     LA_E_IP: Result := ELAIPException.Create;
     LA_E_CONTAINER: Result := ELAContainerException.Create;
-    LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING: Result := ELATwoFactorAuthenticationCodeMissing.Create;
-    LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID: Result := ELATwoFactorAuthenticationCodeInvalid.Create;
+    LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING: Result := ELATwoFactorAuthenticationCodeMissingException.Create;
+    LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID: Result := ELATwoFactorAuthenticationCodeInvalidException.Create;
     LA_E_RATE_LIMIT: Result := ELARateLimitException.Create;
     LA_E_SERVER: Result := ELAServerException.Create;
     LA_E_CLIENT: Result := ELAClientException.Create;
@@ -4527,13 +4527,13 @@ begin
   FErrorCode := LA_E_CONTAINER;
 end;
 
-constructor ELATwoFactorAuthenticationCodeMissing.Create;
+constructor ELATwoFactorAuthenticationCodeMissingException.Create;
 begin
   inherited Create('The two-factor authentication code for the user authentication is missing.');
   FErrorCode := LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING;
 end;
 
-constructor ELATwoFactorAuthenticationCodeInvalid.Create;
+constructor ELATwoFactorAuthenticationCodeInvalidException.Create;
 begin
   inherited Create('The two-factor authentication code provided by the user is invalid.');
   FErrorCode := LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID;
