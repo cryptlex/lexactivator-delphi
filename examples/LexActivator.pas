@@ -47,6 +47,16 @@ type
     lkException // for callback
     );
 
+type
+  TActivationMode = class
+  private
+    FInitialMode: UnicodeString;
+    FCurrentMode: UnicodeString;
+  public
+    property InitialMode: UnicodeString read FInitialMode write FInitialMode;
+    property CurrentMode: UnicodeString read FCurrentMode write FCurrentMode;
+  end;
+
 function LAFlagsToString(Item: TLAFlags): string;
 function LAKeyStatusToString(Item: TLAKeyStatus): string;
 
@@ -188,34 +198,6 @@ procedure SetLicenseKey(const LicenseKey: UnicodeString);
 *)
 
 procedure SetReleaseVersion(const ReleaseVersion: UnicodeString);
-
-(*
-    PROCEDURE: SetReleasePlatform()
-
-    PURPOSE: Sets the release platform e.g. windows, macos, linux
-    The release platform appears along with the activation details in dashboard.
-
-    PARAMETERS:
-    * ReleasePlatform - release platform e.g. windows, macos, linux.
-
-    EXCEPTIONS: ELAProductIdException, ELAReleaseVersionFormatException, ELAReleasePlatformLengthException
-*)
-
-procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
-
-(*
-    PROCEDURE: SetReleaseChannel()
-
-    PURPOSE: Sets the release channel e.g. stable, beta.
-    The release channel appears along with the activation details in dashboard.
-
-    PARAMETERS:
-    * ReleaseChannel - release channel e.g. stable
-
-    EXCEPTIONS: ELAProductIdException, ELAReleaseChannelLengthException
-*)
-
-procedure SetReleaseChannel(const ReleaseChannel: UnicodeString);
 
 (*
     PROCEDURE: SetReleasePublishedDate()
@@ -676,8 +658,7 @@ function GetLicenseMaintenanceExpiryDate: TDateTime;
     RESULT: Max allowed release version.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
-    ELATimeModifiedException, ELAProductVersionNotLinkedException,
-    ELABufferSizeException
+    ELATimeModifiedException, ELABufferSizeException
 *)
 
 function GetLicenseMaxAllowedReleaseVersion: UnicodeString;
@@ -690,8 +671,7 @@ function GetLicenseMaxAllowedReleaseVersion: UnicodeString;
     RESULT: Organization name.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
-    ELATimeModifiedException, ELAProductVersionNotLinkedException,
-    ELABufferSizeException
+    ELATimeModifiedException, ELABufferSizeException
 *)
 
 function GetLicenseOrganizationName: UnicodeString;
@@ -709,6 +689,7 @@ function GetLicenseOrganizationName: UnicodeString;
 
 function GetActivationId: UnicodeString;
 
+
 (*
     FUNCTION: GetActivationMode()
 
@@ -720,7 +701,7 @@ function GetActivationId: UnicodeString;
     ELATimeModifiedException, ELABufferSizeException
 *)
 
-function GetActivationMode: UnicodeString;
+function GetActivationMode: TActivationMode;
 
 (*
     FUNCTION: GetLicenseExpiryDate()
@@ -3392,15 +3373,18 @@ begin
   if not ELAError.CheckOKFail(ErrorCode) then
     raise ELAFailException.Create('Failed to get activation id');
 end;
-function Thin_GetActivationMode(out initialMode; initialModeLength: LongWord; out currentMode; currentModeLength: LongWord): TLAStatusCode; cdecl;
+
+function Thin_GetActivationMode(initialMode: PWideChar; initialModeLength: LongWord;
+  currentMode: PWideChar; currentModeLength: LongWord): Integer; cdecl;
   external LexActivator_DLL name 'GetActivationMode';
 
-function GetActivationMode: UnicodeString;
+function GetActivationMode: TActivationMode;
 var
   ErrorCode: TLAStatusCode;
-  InitialMode, CurrentMode: UnicodeString;
+  ActivationMode: TActivationMode;
+  TempInitialMode, TempCurrentMode: UnicodeString;
 
-  function Try256(out InitialResult, CurrentResult: UnicodeString): Boolean;
+  function Try256(var InitialMode, CurrentMode: UnicodeString): Boolean;
   var
     InitialBuffer, CurrentBuffer: array[0 .. 255] of WideChar;
   begin
@@ -3408,12 +3392,12 @@ var
     Result := ErrorCode <> LA_E_BUFFER_SIZE;
     if ErrorCode = LA_OK then
     begin
-      InitialResult := InitialBuffer;
-      CurrentResult := CurrentBuffer;
+      InitialMode := InitialBuffer;
+      CurrentMode := CurrentBuffer;
     end;
   end;
 
-  function TryHigh(out InitialResult, CurrentResult: UnicodeString): Boolean;
+  function TryHigh(var InitialMode, CurrentMode: UnicodeString): Boolean;
   var
     InitialBuffer, CurrentBuffer: UnicodeString;
     Size: Integer;
@@ -3421,24 +3405,37 @@ var
     Size := 512;
     repeat
       Size := Size * 2;
+      SetLength(InitialBuffer, 0);
       SetLength(InitialBuffer, Size);
+      SetLength(CurrentBuffer, 0);
       SetLength(CurrentBuffer, Size);
-      ErrorCode := Thin_GetActivationMode(PWideChar(InitialBuffer)^, Size, PWideChar(CurrentBuffer)^, Size);
+      ErrorCode := Thin_GetActivationMode(PWideChar(InitialBuffer), Size, PWideChar(CurrentBuffer), Size);
       Result := ErrorCode <> LA_E_BUFFER_SIZE;
     until Result or (Size >= 128 * 1024);
     if ErrorCode = LA_OK then
     begin
-      InitialResult := PWideChar(InitialBuffer);
-      CurrentResult := PWideChar(CurrentBuffer);
+      InitialMode := PWideChar(InitialBuffer);
+      CurrentMode := PWideChar(CurrentBuffer);
     end;
   end;
 
 begin
-  if not Try256(InitialMode, CurrentMode) then TryHigh(InitialMode, CurrentMode);
-  if not ELAError.CheckOKFail(ErrorCode) then
-    raise ELAFailException.Create('Failed to get activation mode');
+  ActivationMode := TActivationMode.Create;
+  try
+    if not Try256(TempInitialMode, TempCurrentMode) then
+      TryHigh(TempInitialMode, TempCurrentMode);
 
-  Result := 'Initial Mode: ' + InitialMode + ', Current Mode: ' + CurrentMode;
+    if not ELAError.CheckOKFail(ErrorCode) then
+      raise ELAFailException.Create('Failed to get the activation mode.');
+
+    ActivationMode.InitialMode := TempInitialMode;
+    ActivationMode.CurrentMode := TempCurrentMode;
+
+    Result := ActivationMode;
+  except
+    ActivationMode.Free;
+    raise;
+  end;
 end;
 
 function Thin_GetLicenseExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
