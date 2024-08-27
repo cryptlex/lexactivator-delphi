@@ -48,14 +48,10 @@ type
     );
 
 type
-  TActivationMode = class
-  private
-    FInitialMode: UnicodeString;
-    FCurrentMode: UnicodeString;
-  public
-    property InitialMode: UnicodeString read FInitialMode write FInitialMode;
-    property CurrentMode: UnicodeString read FCurrentMode write FCurrentMode;
-  end;
+  TActivationMode = record
+    InitialMode: UnicodeString;
+    CurrentMode: UnicodeString;
+end;
 
 function LAFlagsToString(Item: TLAFlags): string;
 function LAKeyStatusToString(Item: TLAKeyStatus): string;
@@ -3382,9 +3378,8 @@ function GetActivationMode: TActivationMode;
 var
   ErrorCode: TLAStatusCode;
   ActivationMode: TActivationMode;
-  TempInitialMode, TempCurrentMode: UnicodeString;
 
-  function Try256(var InitialMode, CurrentMode: UnicodeString): Boolean;
+  function Try256: Boolean;
   var
     InitialBuffer, CurrentBuffer: array[0 .. 255] of WideChar;
   begin
@@ -3392,12 +3387,12 @@ var
     Result := ErrorCode <> LA_E_BUFFER_SIZE;
     if ErrorCode = LA_OK then
     begin
-      InitialMode := InitialBuffer;
-      CurrentMode := CurrentBuffer;
+      ActivationMode.InitialMode := InitialBuffer;
+      ActivationMode.CurrentMode := CurrentBuffer;
     end;
   end;
 
-  function TryHigh(var InitialMode, CurrentMode: UnicodeString): Boolean;
+  function TryHigh: Boolean;
   var
     InitialBuffer, CurrentBuffer: UnicodeString;
     Size: Integer;
@@ -3405,37 +3400,26 @@ var
     Size := 512;
     repeat
       Size := Size * 2;
-      SetLength(InitialBuffer, 0);
       SetLength(InitialBuffer, Size);
-      SetLength(CurrentBuffer, 0);
       SetLength(CurrentBuffer, Size);
       ErrorCode := Thin_GetActivationMode(PWideChar(InitialBuffer), Size, PWideChar(CurrentBuffer), Size);
       Result := ErrorCode <> LA_E_BUFFER_SIZE;
     until Result or (Size >= 128 * 1024);
     if ErrorCode = LA_OK then
     begin
-      InitialMode := PWideChar(InitialBuffer);
-      CurrentMode := PWideChar(CurrentBuffer);
+      ActivationMode.InitialMode := PWideChar(InitialBuffer);
+      ActivationMode.CurrentMode := PWideChar(CurrentBuffer);
     end;
   end;
 
 begin
-  ActivationMode := TActivationMode.Create;
-  try
-    if not Try256(TempInitialMode, TempCurrentMode) then
-      TryHigh(TempInitialMode, TempCurrentMode);
+  if not Try256 then
+    TryHigh;
 
-    if not ELAError.CheckOKFail(ErrorCode) then
-      raise ELAFailException.Create('Failed to get the activation mode.');
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the activation mode.');
 
-    ActivationMode.InitialMode := TempInitialMode;
-    ActivationMode.CurrentMode := TempCurrentMode;
-
-    Result := ActivationMode;
-  except
-    ActivationMode.Free;
-    raise;
-  end;
+  Result := ActivationMode;
 end;
 
 function Thin_GetLicenseExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
