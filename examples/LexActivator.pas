@@ -685,7 +685,6 @@ function GetLicenseOrganizationName: UnicodeString;
 
 function GetActivationId: UnicodeString;
 
-
 (*
     FUNCTION: GetActivationMode()
 
@@ -2517,26 +2516,6 @@ begin
   if not ELAError.CheckOKFail(Thin_SetReleaseVersion(PWideChar(ReleaseVersion))) then
     raise
     ELAFailException.Create('Failed to set release version');
-end;
-
-function Thin_SetReleasePlatform(const releasePlatform: PWideChar): TLAStatusCode; cdecl;
-  external LexActivator_DLL name 'SetReleasePlatform';
-
-procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
-begin
-  if not ELAError.CheckOKFail(Thin_SetReleasePlatform(PWideChar(ReleasePlatform))) then
-    raise
-    ELAFailException.Create('Failed to set release platform');
-end;
-
-function Thin_SetReleaseChannel(const releaseChannel: PWideChar): TLAStatusCode; cdecl;
-  external LexActivator_DLL name 'SetReleaseChannel';
-
-procedure SetReleaseChannel(const ReleaseChannel: UnicodeString);
-begin
-  if not ELAError.CheckOKFail(Thin_SetReleaseChannel(PWideChar(ReleaseChannel))) then
-    raise
-    ELAFailException.Create('Failed to set release channel');
 end;
 
 function Thin_SetReleasePublishedDate(releasePublishedDate: LongWord): TLAStatusCode; cdecl;
