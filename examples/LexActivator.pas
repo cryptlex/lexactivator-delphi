@@ -222,7 +222,7 @@ procedure SetReleasePublishedDate(ReleasePublishedDate: LongWord);
     PARAMETERS:
     * Enable - 0 or 1 to disable or enable logging.
 
-    EXCEPTIONS: ELAProductIdException
+    RETURN CODES : LA_OK
 *)
 
 procedure SetDebugMode(Enable: LongWord);
@@ -252,7 +252,7 @@ procedure SetCacheMode(Enable: Boolean);
     PARAMETERS:
     * TwoFactorAuthenticationCode - the 2FA code.
 
-    EXCEPTIONS: ELAProductIdException
+    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeInvalidException
 *)
 
 procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: UnicodeString);
@@ -269,7 +269,7 @@ procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: Unic
     * Email - user email address.
     * Password - user password.
 
-    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeInvalidException
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
 *)
 
 procedure SetLicenseUserCredential(const Email, Password: UnicodeString);
@@ -653,7 +653,7 @@ function GetLicenseMaintenanceExpiryDate: TDateTime;
 
     RESULT: Max allowed release version.
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException, ELATimeException,
     ELATimeModifiedException, ELABufferSizeException
 *)
 
@@ -974,7 +974,8 @@ function ActivateLicenseOffline(const FilePath: UnicodeString): TLAKeyStatus;
 
     RETURN CODES: lkOK, lkExpired, lkFail
 
-    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeMissingException
+    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeMissingException, ELAInetException, ELARateLimitException,
+    ELATwoFactorAuthenticationCodeInvalidException, ELAAuthenticationFailedException, ELALoginTemporarilyLockedException, ELAServerException
 *)
 
 function AuthenticateUser(const Email , Password: UnicodeString): TLAKeyStatus;
@@ -989,7 +990,8 @@ function AuthenticateUser(const Email , Password: UnicodeString): TLAKeyStatus;
 
     RETURN CODES: lkOK, lkExpired, lkFail
 
-    EXCEPTIONS: ELAProductIdException
+    EXCEPTIONS: ELAProductIdException, ELAInetException, ELAServerException, ELARateLimitException, LA_E_AUTHENTICATION_ID_TOKEN_INVALID
+    ELAOIDCSSONotEnabledException, ELAUsersLimitReachedException
 *)
 
 function AuthenticateUserWithIdToken(const Token: UnicodeString): TLAKeyStatus;
@@ -1943,6 +1945,51 @@ type
   public
     constructor Create;
   end;
+    
+    (*
+        CODE: LA_E_LOGIN_TEMPORARILY_LOCKED
+
+        MESSAGE: The user account has been temporarily locked for 5 mins due to 5 failed attempts.
+    *)
+
+  ELALoginTemporarilyLockedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+    
+    (*
+        CODE: LA_E_AUTHENTICATION_ID_TOKEN_INVALID
+
+        MESSAGE: Invalid authentication ID token.
+    *)
+
+  ELAAuthenticationIdTokenInvalidException = class(ELAException)
+  public
+    constructor Create;
+  end;
+    
+    (*
+        CODE: LA_E_OIDC_SSO_NOT_ENABLED
+
+        MESSAGE: OIDC SSO is not enabled.
+    *)
+
+  ELAOIDCSSONotEnabledException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_USERS_LIMIT_REACHED
+
+        MESSAGE: The allowed users for this account has reached its limit.
+    *)
+
+  ELAUsersLimitReachedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+  
 
 implementation
 
@@ -2444,6 +2491,33 @@ const
 
   LA_E_CLIENT = TLAStatusCode(92);
 
+    (*
+        CODE: LA_E_LOGIN_TEMPORARILY_LOCKED
+
+        MESSAGE: The user account has been temporarily locked for 5 mins due to 5 failed attempts.
+    *)
+    LA_E_LOGIN_TEMPORARILY_LOCKED = 100,
+    
+    (*
+        CODE: LA_E_AUTHENTICATION_ID_TOKEN_INVALID
+
+        MESSAGE: Invalid authentication ID token.
+    *)
+    LA_E_AUTHENTICATION_ID_TOKEN_INVALID = 101,
+
+    (*
+        CODE: LA_E_OIDC_SSO_NOT_ENABLED
+
+        MESSAGE: OIDC SSO is not enabled.
+    *)
+    LA_E_OIDC_SSO_NOT_ENABLED = 102
+
+    (*
+        CODE: LA_E_USERS_LIMIT_REACHED
+
+        MESSAGE: The allowed users for this account has reached its limit.
+    *)
+    LA_E_USERS_LIMIT_REACHED = 103,
 (*********************************************************************************)
 
 function Thin_SetProductFile(const filePath: PWideChar): TLAStatusCode; cdecl;
@@ -4096,6 +4170,10 @@ begin
     LA_E_RATE_LIMIT: Result := ELARateLimitException.Create;
     LA_E_SERVER: Result := ELAServerException.Create;
     LA_E_CLIENT: Result := ELAClientException.Create;
+    LA_E_LOGIN_TEMPORARILY_LOCKED: Result := ELALoginTemporarilyLockedException.Create;
+    LA_E_AUTHENTICATION_ID_TOKEN_INVALID: Result := ELAAuthenticationIdTokenInvalidException.Create;
+    LA_E_OIDC_SSO_NOT_ENABLED: Result := ELAOIDCSSONotEnabledException.Create;
+    LA_E_USERS_LIMIT_REACHED: Result := ELAUsersLimitReachedException.Create;
   else
     Result := ELAUnknownErrorCodeException.Create(ErrorCode);
   end;
@@ -4515,6 +4593,30 @@ constructor ELAClientException.Create;
 begin
   inherited Create('Client error');
   FErrorCode := LA_E_CLIENT;
+end;
+
+constructor ELALoginTemporarilyLockedException.Create;
+begin
+  inherited Create('Client error');
+  FErrorCode := LA_E_LOGIN_TEMPORARILY_LOCKED;
+end;
+
+constructor ELAAuthenticationIdTokenInvalidException.Create;
+begin
+  inherited Create('Client error');
+  FErrorCode := LA_E_AUTHENTICATION_ID_TOKEN_INVALID;
+end;
+
+constructor ELAOIDCSSONotEnabledException.Create;
+begin
+  inherited Create('Client error');
+  FErrorCode := LA_E_OIDC_SSO_NOT_ENABLED;
+end;
+
+constructor ELAUsersLimitReachedException.Create;
+begin
+  inherited Create('Client error');
+  FErrorCode := LA_E_USERS_LIMIT_REACHED;
 end;
 
 initialization
