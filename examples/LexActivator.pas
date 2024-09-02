@@ -1945,7 +1945,7 @@ type
   public
     constructor Create;
   end;
-    
+
     (*
         CODE: LA_E_LOGIN_TEMPORARILY_LOCKED
 
@@ -1956,7 +1956,7 @@ type
   public
     constructor Create;
   end;
-    
+
     (*
         CODE: LA_E_AUTHENTICATION_ID_TOKEN_INVALID
 
@@ -1967,7 +1967,7 @@ type
   public
     constructor Create;
   end;
-    
+
     (*
         CODE: LA_E_OIDC_SSO_NOT_ENABLED
 
@@ -1990,7 +1990,6 @@ type
     constructor Create;
   end;
   
-
 implementation
 
 uses
@@ -2496,28 +2495,29 @@ const
 
         MESSAGE: The user account has been temporarily locked for 5 mins due to 5 failed attempts.
     *)
-    LA_E_LOGIN_TEMPORARILY_LOCKED = 100,
-    
+    LA_E_LOGIN_TEMPORARILY_LOCKED = 100;
+
     (*
         CODE: LA_E_AUTHENTICATION_ID_TOKEN_INVALID
 
         MESSAGE: Invalid authentication ID token.
     *)
-    LA_E_AUTHENTICATION_ID_TOKEN_INVALID = 101,
+    LA_E_AUTHENTICATION_ID_TOKEN_INVALID = 101;
 
     (*
         CODE: LA_E_OIDC_SSO_NOT_ENABLED
 
         MESSAGE: OIDC SSO is not enabled.
     *)
-    LA_E_OIDC_SSO_NOT_ENABLED = 102
+    LA_E_OIDC_SSO_NOT_ENABLED = 102;
 
     (*
         CODE: LA_E_USERS_LIMIT_REACHED
 
         MESSAGE: The allowed users for this account has reached its limit.
     *)
-    LA_E_USERS_LIMIT_REACHED = 103,
+    LA_E_USERS_LIMIT_REACHED = 103;
+
 (*********************************************************************************)
 
 function Thin_SetProductFile(const filePath: PWideChar): TLAStatusCode; cdecl;
