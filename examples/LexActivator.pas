@@ -699,6 +699,35 @@ function GetActivationId: UnicodeString;
 function GetActivationMode: TActivationMode;
 
 (*
+    FUNCTION: GetLicenseOrganizationName()
+
+    PURPOSE: Gets the name associated with the license organization.
+
+    RESULT: organization address linked to license.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetLicenseOrganizationAddress: UnicodeString;
+
+(*
+    FUNCTION: GetUserLicenses()
+
+    PURPOSE: Gets the user licenses for the product.
+
+    This function sends a network request to Cryptlex servers to get the licenses.
+    Make sure AuthenticateUser() function is called before calling this function.
+
+    RESULT: License linked to the user.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELAInetException, ELAServerException,
+    ELARateLimitException, ELAUserNotAuthenticatedException, ELABufferSizeException
+*)
+
+function GetUserLicenses: UnicodeString;
+
+(*
     FUNCTION: GetLicenseExpiryDate()
 
     PURPOSE: Gets the license expiry date timestamp.
@@ -1892,6 +1921,18 @@ type
   end;
 
     (*
+        CODE: LA_E_USER_NOT_AUTHENTICATED
+
+        MESSAGE: Application is being run inside a container and
+        activation has been disallowed in the container.
+    *)
+
+  ELAUserNotAuthenticatedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
         CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING
 
         MESSAGE: The two-factor authentication code for the user authentication is missing.
@@ -1989,7 +2030,7 @@ type
   public
     constructor Create;
   end;
-  
+
 implementation
 
 uses
@@ -2451,6 +2492,14 @@ const
   LA_E_CONTAINER = TLAStatusCode(83);
 
     (*
+        CODE: LA_E_USER_NOT_AUTHENTICATED
+
+        MESSAGE: The user is not authenticated.
+    *)
+    
+  LA_E_USER_NOT_AUTHENTICATED = TLAStatusCode(87);
+
+    (*
         CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING
 
         MESSAGE: The two-factor authentication code for the user authentication is missing.
@@ -2495,28 +2544,28 @@ const
 
         MESSAGE: The user account has been temporarily locked for 5 mins due to 5 failed attempts.
     *)
-    LA_E_LOGIN_TEMPORARILY_LOCKED = 100;
+    LA_E_LOGIN_TEMPORARILY_LOCKED = TLAStatusCode(100);
 
     (*
         CODE: LA_E_AUTHENTICATION_ID_TOKEN_INVALID
 
         MESSAGE: Invalid authentication ID token.
     *)
-    LA_E_AUTHENTICATION_ID_TOKEN_INVALID = 101;
+    LA_E_AUTHENTICATION_ID_TOKEN_INVALID = TLAStatusCode(101);
 
     (*
         CODE: LA_E_OIDC_SSO_NOT_ENABLED
 
         MESSAGE: OIDC SSO is not enabled.
     *)
-    LA_E_OIDC_SSO_NOT_ENABLED = 102;
+    LA_E_OIDC_SSO_NOT_ENABLED = TLAStatusCode(102);
 
     (*
         CODE: LA_E_USERS_LIMIT_REACHED
 
         MESSAGE: The allowed users for this account has reached its limit.
     *)
-    LA_E_USERS_LIMIT_REACHED = 103;
+    LA_E_USERS_LIMIT_REACHED = TLAStatusCode(103);
 
 (*********************************************************************************)
 
@@ -3475,6 +3524,76 @@ begin
   Result := ActivationMode;
 end;
 
+function Thin_GetLicenseOrganizationAddress(out organizationAddress; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseOrganizationAddressInternal';
+
+function GetLicenseOrganizationAddress: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseOrganizationAddress(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseOrganizationAddress(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get organization address linked to license');
+end;
+
+function Thin_GetUserLicenses(out userLicenses; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetUserLicensesInternal';
+
+function GetUserLicenses: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetUserLicenses(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetUserLicenses(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get licenses linked to the user');
+end;
+
 function Thin_GetLicenseExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseExpiryDate';
 
@@ -4165,6 +4284,7 @@ begin
     LA_E_COUNTRY: Result := ELACountryException.Create;
     LA_E_IP: Result := ELAIPException.Create;
     LA_E_CONTAINER: Result := ELAContainerException.Create;
+    LA_E_USER_NOT_AUTHENTICATED: Result := ELAUserNotAuthenticatedException.Create;
     LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING: Result := ELATwoFactorAuthenticationCodeMissingException.Create;
     LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID: Result := ELATwoFactorAuthenticationCodeInvalidException.Create;
     LA_E_RATE_LIMIT: Result := ELARateLimitException.Create;
@@ -4565,6 +4685,12 @@ begin
   FErrorCode := LA_E_CONTAINER;
 end;
 
+constructor ELAUserNotAuthenticatedException.Create;
+begin
+  inherited Create('The user is not authenticated.');
+  FErrorCode := LA_E_USER_NOT_AUTHENTICATED;
+end;
+
 constructor ELATwoFactorAuthenticationCodeMissingException.Create;
 begin
   inherited Create('The two-factor authentication code for the user authentication is missing.');
@@ -4597,25 +4723,25 @@ end;
 
 constructor ELALoginTemporarilyLockedException.Create;
 begin
-  inherited Create('Client error');
+  inherited Create('The user account has been temporarily locked for 5 mins due to 5 failed attempts');
   FErrorCode := LA_E_LOGIN_TEMPORARILY_LOCKED;
 end;
 
 constructor ELAAuthenticationIdTokenInvalidException.Create;
 begin
-  inherited Create('Client error');
+  inherited Create('Invalid authentication ID token');
   FErrorCode := LA_E_AUTHENTICATION_ID_TOKEN_INVALID;
 end;
 
 constructor ELAOIDCSSONotEnabledException.Create;
 begin
-  inherited Create('Client error');
+  inherited Create('OIDC SSO is not enabled');
   FErrorCode := LA_E_OIDC_SSO_NOT_ENABLED;
 end;
 
 constructor ELAUsersLimitReachedException.Create;
 begin
-  inherited Create('Client error');
+  inherited Create('The allowed users for this account has reached its limit');
   FErrorCode := LA_E_USERS_LIMIT_REACHED;
 end;
 
