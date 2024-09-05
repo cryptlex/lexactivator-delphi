@@ -34,9 +34,13 @@ interface
 uses
   LexActivator.DelphiFeatures,
 {$IFDEF DELPHI_UNITS_SCOPED}
-  System.SysUtils
+  System.SysUtils,
+  System.JSON,
+  System.Generics.Collections
 {$ELSE}
-  SysUtils
+  SysUtils,
+  JSON,
+  Generics.Collections
 {$ENDIF}
   ;
 
@@ -46,6 +50,30 @@ type
     lkTrialExpired, lkLocalTrialExpired, lkFail,
     lkException // for callback
     );
+
+type
+  TOrganizationAddress = record
+    AddressLine1: UnicodeString;
+    AddressLine2: UnicodeString;
+    City: UnicodeString;
+    State: UnicodeString;
+    Country: UnicodeString;
+    PostCode: UnicodeString;
+end;
+
+type
+  TLicenseMetadata = record
+    Key: string;
+    Value: string;
+end;
+
+type
+  TUserLicense = record
+    Key: string;
+    AllowedActivations: Int64;
+    AllowedDeactivations: Int64;
+    Metadata: TArray<TLicenseMetadata>;
+end;
 
 type
   TActivationMode = record
@@ -709,7 +737,7 @@ function GetActivationMode: TActivationMode;
     ELATimeModifiedException, ELABufferSizeException
 *)
 
-function GetLicenseOrganizationAddress: UnicodeString;
+function GetLicenseOrganizationAddress: TOrganizationAddress;
 
 (*
     FUNCTION: GetUserLicenses()
@@ -725,7 +753,7 @@ function GetLicenseOrganizationAddress: UnicodeString;
     ELARateLimitException, ELAUserNotAuthenticatedException, ELABufferSizeException
 *)
 
-function GetUserLicenses: UnicodeString;
+function GetUserLicenses: TArray<TUserLicense>;
 
 (*
     FUNCTION: GetLicenseExpiryDate()
@@ -2496,7 +2524,7 @@ const
 
         MESSAGE: The user is not authenticated.
     *)
-    
+
   LA_E_USER_NOT_AUTHENTICATED = TLAStatusCode(87);
 
     (*
@@ -3527,9 +3555,13 @@ end;
 function Thin_GetLicenseOrganizationAddress(out organizationAddress; length: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseOrganizationAddressInternal';
 
-function GetLicenseOrganizationAddress: UnicodeString;
+function GetLicenseOrganizationAddress: TOrganizationAddress;
 var
   ErrorCode: TLAStatusCode;
+  JSONString: UnicodeString;
+  JSONObject: TJSONObject;
+
+  // Internal helper functions to handle buffer sizes
   function Try256(var OuterResult: UnicodeString): Boolean;
   var
     Buffer: array[0 .. 255] of WideChar;
@@ -3538,6 +3570,7 @@ var
     Result := ErrorCode <> LA_E_BUFFER_SIZE;
     if ErrorCode = LA_OK then OuterResult := Buffer;
   end;
+
   function TryHigh(var OuterResult: UnicodeString): Boolean;
   var
     Buffer: UnicodeString;
@@ -3553,18 +3586,61 @@ var
     until Result or (Size >= 128 * 1024);
     if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
   end;
+
 begin
-  if not Try256(Result) then TryHigh(Result);
+  if not Try256(JSONString) then TryHigh(JSONString);
+
   if not ELAError.CheckOKFail(ErrorCode) then
     raise ELAFailException.Create('Failed to get organization address linked to license');
+
+  Result.AddressLine1 := '';
+  Result.AddressLine2 := '';
+  Result.City := '';
+  Result.State := '';
+  Result.Country := '';
+  Result.PostCode := '';
+
+  if JSONString <> '' then
+  begin
+    try
+      JSONObject := TJSONObject.ParseJSONValue(JSONString) as TJSONObject;
+      if JSONObject <> nil then
+      try
+        JSONObject.TryGetValue('AddressLine1', Result.AddressLine1);
+        JSONObject.TryGetValue('AddressLine2', Result.AddressLine2);
+        JSONObject.TryGetValue('City', Result.City);
+        JSONObject.TryGetValue('State', Result.State);
+        JSONObject.TryGetValue('Country', Result.Country);
+        JSONObject.TryGetValue('PostCode', Result.PostCode);
+      finally
+        JSONObject.Free;
+      end
+      else
+        raise Exception.Create('Error while parsing JSON: Invalid JSON data');
+    except
+      on E: Exception do
+      begin
+        raise Exception.Create('Error while parsing JSON: ' + E.Message);
+      end;
+    end;
+  end;
 end;
 
 function Thin_GetUserLicenses(out userLicenses; length: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetUserLicensesInternal';
 
-function GetUserLicenses: UnicodeString;
+function GetUserLicenses: TArray<TUserLicense>;
 var
   ErrorCode: TLAStatusCode;
+  JSONString: UnicodeString;
+  JSONArray: TJSONArray;
+  JSONObject: TJSONObject;
+  LicenseItem: TUserLicense;
+  MetadataArray: TJSONArray;
+  MetadataItem: TJSONObject;
+  Metadata: TLicenseMetadata;
+  I, J: Integer;
+
   function Try256(var OuterResult: UnicodeString): Boolean;
   var
     Buffer: array[0 .. 255] of WideChar;
@@ -3573,6 +3649,7 @@ var
     Result := ErrorCode <> LA_E_BUFFER_SIZE;
     if ErrorCode = LA_OK then OuterResult := Buffer;
   end;
+
   function TryHigh(var OuterResult: UnicodeString): Boolean;
   var
     Buffer: UnicodeString;
@@ -3581,17 +3658,68 @@ var
     Size := 512;
     repeat
       Size := Size * 2;
-      SetLength(Buffer, 0);
       SetLength(Buffer, Size);
       ErrorCode := Thin_GetUserLicenses(PWideChar(Buffer)^, Size);
       Result := ErrorCode <> LA_E_BUFFER_SIZE;
     until Result or (Size >= 128 * 1024);
     if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
   end;
+
 begin
-  if not Try256(Result) then TryHigh(Result);
-  if not ELAError.CheckOKFail(ErrorCode) then
-    raise ELAFailException.Create('Failed to get licenses linked to the user');
+  Result := nil; 
+  
+  if not Try256(JSONString) then
+    if not TryHigh(JSONString) then
+      raise Exception.Create('Failed to fetch user licenses: Unable to retrieve data.');
+
+  if ErrorCode <> LA_OK then
+    raise Exception.Create('Failed to get user licenses. Error code: ' + IntToStr(ErrorCode));
+
+  JSONArray := TJSONObject.ParseJSONValue(JSONString) as TJSONArray;
+  if JSONArray = nil then
+    raise Exception.Create('Error while parsing JSON: Invalid JSON data or empty JSON array');
+
+  try
+    SetLength(Result, JSONArray.Count);
+    for I := 0 to JSONArray.Count - 1 do
+    begin
+      JSONObject := JSONArray.Items[I] as TJSONObject;
+      LicenseItem.Key := '';
+      LicenseItem.AllowedActivations := 0;
+      LicenseItem.AllowedDeactivations := 0;
+      SetLength(LicenseItem.Metadata, 0);
+
+      if JSONObject.GetValue('key') <> nil then
+        LicenseItem.Key := JSONObject.GetValue('key').Value;
+      if JSONObject.GetValue('allowedActivations') <> nil then
+        LicenseItem.AllowedActivations := JSONObject.GetValue('allowedActivations').AsType<Int64>;
+      if JSONObject.GetValue('allowedDeactivations') <> nil then
+        LicenseItem.AllowedDeactivations := JSONObject.GetValue('allowedDeactivations').AsType<Int64>;
+
+      MetadataArray := JSONObject.GetValue('metadata') as TJSONArray;
+      if MetadataArray <> nil then
+      begin
+        SetLength(LicenseItem.Metadata, MetadataArray.Count);
+        for J := 0 to MetadataArray.Count - 1 do
+        begin
+          MetadataItem := MetadataArray.Items[J] as TJSONObject;
+          Metadata.Key := '';
+          Metadata.Value := '';
+
+          if MetadataItem.GetValue('key') <> nil then
+            Metadata.Key := MetadataItem.GetValue('key').Value;
+          if MetadataItem.GetValue('value') <> nil then
+            Metadata.Value := MetadataItem.GetValue('value').Value;
+
+          LicenseItem.Metadata[J] := Metadata;
+        end;
+      end;
+
+      Result[I] := LicenseItem;
+    end;
+  finally
+    JSONArray.Free;
+  end;
 end;
 
 function Thin_GetLicenseExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
