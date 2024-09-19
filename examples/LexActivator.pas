@@ -62,7 +62,7 @@ type
 end;
 
 type
-  TLicenseMetadata = record
+  TMetadata = record
     Key: string;
     Value: string;
 end;
@@ -70,9 +70,10 @@ end;
 type
   TUserLicense = record
     Key: string;
+    &Type: string;
     AllowedActivations: Int64;
     AllowedDeactivations: Int64;
-    Metadata: TArray<TLicenseMetadata>;
+    Metadata: TArray<TMetadata>;
 end;
 
 type
@@ -727,11 +728,11 @@ function GetActivationId: UnicodeString;
 function GetActivationMode: TActivationMode;
 
 (*
-    FUNCTION: GetLicenseOrganizationName()
+    FUNCTION: GetLicenseOrganizationAddress()
 
-    PURPOSE: Gets the name associated with the license organization.
+    PURPOSE: Gets the address associated with the license organization.
 
-    RESULT: organization address linked to license.
+    RESULT: Organization address.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
     ELATimeModifiedException, ELABufferSizeException
@@ -747,7 +748,7 @@ function GetLicenseOrganizationAddress: TOrganizationAddress;
     This function sends a network request to Cryptlex servers to get the licenses.
     Make sure AuthenticateUser() function is called before calling this function.
 
-    RESULT: License linked to the user.
+    RESULT: User licenses for the product.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELAInetException, ELAServerException,
     ELARateLimitException, ELAUserNotAuthenticatedException, ELABufferSizeException
@@ -1047,7 +1048,7 @@ function AuthenticateUser(const Email , Password: UnicodeString): TLAKeyStatus;
 
     RETURN CODES: lkOK, lkExpired, lkFail
 
-    EXCEPTIONS: ELAProductIdException, ELAInetException, ELAServerException, ELARateLimitException, LA_E_AUTHENTICATION_ID_TOKEN_INVALID
+    EXCEPTIONS: ELAProductIdException, ELAInetException, ELAServerException, ELARateLimitException, ELAAuthenticationIdTokenInvalidException
     ELAOIDCSSONotEnabledException, ELAUsersLimitReachedException
 *)
 
@@ -3593,12 +3594,7 @@ begin
   if not ELAError.CheckOKFail(ErrorCode) then
     raise ELAFailException.Create('Failed to get organization address linked to license');
 
-  Result.AddressLine1 := '';
-  Result.AddressLine2 := '';
-  Result.City := '';
-  Result.State := '';
-  Result.Country := '';
-  Result.PostCode := '';
+  Result:= Default(TOrganizationAddress);
 
   if JSONString <> '' then
   begin
@@ -3634,20 +3630,39 @@ var
   ErrorCode: TLAStatusCode;
   JSONString: UnicodeString;
   JSONArray: TJSONArray;
-  JSONObject: TJSONObject;
   LicenseItem: TUserLicense;
   MetadataArray: TJSONArray;
   MetadataItem: TJSONObject;
-  Metadata: TLicenseMetadata;
+  Metadata: TMetadata;
   I, J: Integer;
 
+  function GetJSONStrValue(const JSONObject: TJSONObject; const FieldName: string): string;
+  var
+    JSONValue: TJSONValue;
+  begin
+    Result := '';
+    JSONValue := JSONObject.GetValue(FieldName);
+    if JSONValue <> nil then
+      Result := JSONValue.Value;
+  end;
+
+  function GetJSONInt64Value(const JSONObject: TJSONObject; const FieldName: string): Int64;
+  var
+    JSONValue: TJSONValue;
+  begin
+    Result := 0;
+    JSONValue := JSONObject.GetValue(FieldName);
+    if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
+      Exit;
+  end;
   function Try256(var OuterResult: UnicodeString): Boolean;
   var
-    Buffer: array[0 .. 255] of WideChar;
+    Buffer: array[0..255] of WideChar;
   begin
     ErrorCode := Thin_GetUserLicenses(Buffer, Length(Buffer));
     Result := ErrorCode <> LA_E_BUFFER_SIZE;
-    if ErrorCode = LA_OK then OuterResult := Buffer;
+    if ErrorCode = LA_OK then
+      OuterResult := Buffer;
   end;
 
   function TryHigh(var OuterResult: UnicodeString): Boolean;
@@ -3662,12 +3677,13 @@ var
       ErrorCode := Thin_GetUserLicenses(PWideChar(Buffer)^, Size);
       Result := ErrorCode <> LA_E_BUFFER_SIZE;
     until Result or (Size >= 128 * 1024);
-    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+    if ErrorCode = LA_OK then
+      OuterResult := PWideChar(Buffer);
   end;
 
 begin
-  Result := nil; 
-  
+  Result := nil;
+
   if not Try256(JSONString) then
     if not TryHigh(JSONString) then
       raise Exception.Create('Failed to fetch user licenses: Unable to retrieve data.');
@@ -3683,34 +3699,21 @@ begin
     SetLength(Result, JSONArray.Count);
     for I := 0 to JSONArray.Count - 1 do
     begin
-      JSONObject := JSONArray.Items[I] as TJSONObject;
-      LicenseItem.Key := '';
-      LicenseItem.AllowedActivations := 0;
-      LicenseItem.AllowedDeactivations := 0;
-      SetLength(LicenseItem.Metadata, 0);
-
-      if JSONObject.GetValue('key') <> nil then
-        LicenseItem.Key := JSONObject.GetValue('key').Value;
-      if JSONObject.GetValue('allowedActivations') <> nil then
-        LicenseItem.AllowedActivations := JSONObject.GetValue('allowedActivations').AsType<Int64>;
-      if JSONObject.GetValue('allowedDeactivations') <> nil then
-        LicenseItem.AllowedDeactivations := JSONObject.GetValue('allowedDeactivations').AsType<Int64>;
-
-      MetadataArray := JSONObject.GetValue('metadata') as TJSONArray;
+      LicenseItem := Default(TUserLicense);
+      
+      LicenseItem.Key := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'key');
+      LicenseItem.&Type := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'key');
+      LicenseItem.AllowedActivations := GetJSONInt64Value(JSONArray.Items[I] as TJSONObject, 'allowedActivations');
+      LicenseItem.AllowedDeactivations := GetJSONInt64Value(JSONArray.Items[I] as TJSONObject, 'allowedDeactivations');
+      MetadataArray := (JSONArray.Items[I] as TJSONObject).GetValue('metadata') as TJSONArray;
       if MetadataArray <> nil then
       begin
         SetLength(LicenseItem.Metadata, MetadataArray.Count);
         for J := 0 to MetadataArray.Count - 1 do
         begin
           MetadataItem := MetadataArray.Items[J] as TJSONObject;
-          Metadata.Key := '';
-          Metadata.Value := '';
-
-          if MetadataItem.GetValue('key') <> nil then
-            Metadata.Key := MetadataItem.GetValue('key').Value;
-          if MetadataItem.GetValue('value') <> nil then
-            Metadata.Value := MetadataItem.GetValue('value').Value;
-
+          Metadata.Key := GetJSONStrValue(MetadataItem, 'key');
+          Metadata.Value := GetJSONStrValue(MetadataItem, 'value');
           LicenseItem.Metadata[J] := Metadata;
         end;
       end;
