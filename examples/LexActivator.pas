@@ -34,9 +34,13 @@ interface
 uses
   LexActivator.DelphiFeatures,
 {$IFDEF DELPHI_UNITS_SCOPED}
-  System.SysUtils
+  System.SysUtils,
+  System.JSON,
+  System.Generics.Collections
 {$ELSE}
-  SysUtils
+  SysUtils,
+  JSON,
+  Generics.Collections
 {$ENDIF}
   ;
 
@@ -47,8 +51,39 @@ type
     lkException // for callback
     );
 
+type
+  TOrganizationAddress = record
+    AddressLine1: UnicodeString;
+    AddressLine2: UnicodeString;
+    City: UnicodeString;
+    State: UnicodeString;
+    Country: UnicodeString;
+    PostCode: UnicodeString;
+end;
+
+type
+  TMetadata = record
+    Key: string;
+    Value: string;
+end;
+
+type
+  TUserLicense = record
+    Key: string;
+    &Type: string;
+    AllowedActivations: Int64;
+    AllowedDeactivations: Int64;
+    Metadata: TArray<TMetadata>;
+end;
+
+type
+  TActivationMode = record
+    InitialMode: UnicodeString;
+    CurrentMode: UnicodeString;
+end;
+
 function LAFlagsToString(Item: TLAFlags): string;
-function LAKeyStatusToString(Item: TLAKeyStatus): string;    
+function LAKeyStatusToString(Item: TLAKeyStatus): string;
 
 (*
     PROCEDURE: SetProductFile()
@@ -176,6 +211,82 @@ procedure SetCustomDeviceFingerprint(const Fingerprint: UnicodeString);
 procedure SetLicenseKey(const LicenseKey: UnicodeString);
 
 (*
+    PROCEDURE: SetReleaseVersion()
+
+    PURPOSE: Sets the current release version of your application.
+    The release version appears along with the activation details in dashboard.
+
+    PARAMETERS:
+    * ReleaseVersion - string in following allowed formats: x.x, x.x.x, x.x.x.x.
+
+    EXCEPTIONS: ELAProductIdException, ELAReleaseVersionFormatException
+*)
+
+procedure SetReleaseVersion(const ReleaseVersion: UnicodeString);
+
+(*
+    PROCEDURE: SetReleasePublishedDate()
+
+    PURPOSE: Sets the release published date of your application.
+
+    PARAMETERS:
+    * ReleasePublishedDate - unix timestamp of release published date.
+
+    EXCEPTIONS: ELAProductIdException
+*)
+
+procedure SetReleasePublishedDate(ReleasePublishedDate: LongWord);
+
+(*
+    PROCEDURE: SetDebugMode()
+
+    PURPOSE: Enables network logs.
+
+    This function should be used for network testing only in case of network errors.
+    By default logging is disabled.
+
+    This function generates the lexactivator-logs.log file in the same directory
+    where the application is running.
+
+    PARAMETERS:
+    * Enable - 0 or 1 to disable or enable logging.
+
+    RETURN CODES : LA_OK
+*)
+
+procedure SetDebugMode(Enable: LongWord);
+
+(*
+    PROCEDURE: SetCacheMode()
+
+    PURPOSE: Enables or disables in-memory caching for LexActivator. This function is designed to control caching
+    behavior to suit specific application requirements. Caching is enabled by default to enhance performance.
+
+    Disabling caching is recommended in environments where multiple processes access the same license on a
+    single machine and require real-time updates to the license state.
+
+    PARAMETERS:
+    * Enable - False or True to disable or enable in-memory caching.
+
+    EXCEPTIONS: ELAProductIdException
+*)
+
+procedure SetCacheMode(Enable: Boolean);
+
+(*
+    PROCEDURE: SetTwoFactorAuthenticationCode()
+
+    PURPOSE: Sets the two-factor authentication code for the user authentication.
+
+    PARAMETERS:
+    * TwoFactorAuthenticationCode - the 2FA code.
+
+    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeInvalidException
+*)
+
+procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: UnicodeString);
+
+(*
     PROCEDURE: SetLicenseUserCredential()
 
     PURPOSE: Sets the license user email and password for authentication.
@@ -247,12 +358,12 @@ procedure ResetLicenseCallback;
     lease duration property is enabled.
 
     PARAMETERS:
-    * LeaseDuration - value of the lease duration.
+    * LeaseDuration - value of the lease duration. A value of -1 indicates unlimited lease duration.
 
     EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
 *)
 
-procedure SetActivationLeaseDuration(LeaseDuration: LongWord);
+procedure SetActivationLeaseDuration(LeaseDuration: Int64);
 
 (*
     PROCEDURE: SetActivationMetadata()
@@ -449,7 +560,7 @@ function GetLicenseMetadata(const Key: UnicodeString): UnicodeString;
 
     PARAMETERS:
     * Name - name of the meter attribute
-    * AllowedUses - the integer that receives the value
+    * AllowedUses - the integer that receives the value. A value of -1 indicates unlimited allowed uses.
     * TotalUses - the integer that receives the value
     * GrossUses - the integer that receives the value
 
@@ -458,7 +569,7 @@ function GetLicenseMetadata(const Key: UnicodeString): UnicodeString;
 *)
 
 procedure GetLicenseMeterAttribute
-  (const Name: UnicodeString; out AllowedUses, TotalUses, GrossUses: LongWord);
+  (const Name: UnicodeString; out AllowedUses: Int64; TotalUses, GrossUses: UInt64);
 
 (*
     FUNCTION: GetLicenseKey()
@@ -478,13 +589,13 @@ function GetLicenseKey: UnicodeString;
 
     PURPOSE: Gets the allowed activations of the license.
 
-    RESULT: Allowed activations of the license.
+    RESULT: Allowed activations of the license. A value of -1 indicates unlimited number of activations.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
     ELATimeModifiedException
 *)
 
-function GetLicenseAllowedActivations: LongWord;
+function GetLicenseAllowedActivations: Int64;
 
 (*
     FUNCTION: GetLicenseTotalActivations()
@@ -500,13 +611,160 @@ function GetLicenseAllowedActivations: LongWord;
 function GetLicenseTotalActivations: LongWord;
 
 (*
+    FUNCTION: GetLicenseTotalDeactivations()
+
+    PURPOSE: Gets the total deactivations of the license.
+
+    RESULT: Total deactivations of the license.
+
+    RETURN CODES: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
+*)
+
+function GetLicenseTotalDeactivations: LongWord;
+
+(*
+    FUNCTION: GetLicenseAllowedDeactivations()
+
+    PURPOSE: Gets the allowed deactivations of the license.
+
+    RESULT: Allowed deactivations of the license. A value of -1 indicates unlimited number of deactivations.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
+*)
+
+function GetLicenseAllowedDeactivations: Int64;
+
+(*
+    FUNCTION: GetLicenseCreationDate()
+
+    PURPOSE: Gets the license creation date timestamp.
+
+    RESULT: License creation date timestamp.
+
+    RETURN CODES: ELAFailException, ELAProductIdException, ELATimeException, ELALicenseKeyException
+    ELATimeModifiedException
+*)
+
+function GetLicenseCreationDate: TDateTime;
+
+(*
+    FUNCTION: GetLicenseActivationDate()
+
+    PURPOSE: Gets the activation creation date timestamp.
+
+    RESULT: Activation creation date timestamp.
+
+    RETURN CODES: ELAFailException, ELAProductIdException, ELATimeException, ELALicenseKeyException
+    ELATimeModifiedException
+*)
+
+function GetLicenseActivationDate: TDateTime;
+
+(*
+    FUNCTION: GetLicenseMaintenanceExpiryDate()
+
+    PURPOSE: Gets the license maintenance expiry date timestamp.
+
+    RESULT: Maintenance expiry date timestamp.
+
+    RETURN CODES: ELAFailException, ELAProductIdException, ELATimeException, ELALicenseKeyException
+    ELATimeModifiedException
+*)
+
+function GetLicenseMaintenanceExpiryDate: TDateTime;
+
+(*
+    FUNCTION: GetLicenseMaxAllowedReleaseVersion()
+
+    PURPOSE: Gets the maximum allowed release version of the license.
+
+    RESULT: Max allowed release version.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException, ELATimeException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetLicenseMaxAllowedReleaseVersion: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseOrganizationName()
+
+    PURPOSE: Gets the organization name associated with the license.
+
+    RESULT: Organization name.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetLicenseOrganizationName: UnicodeString;
+
+(*
+    FUNCTION: GetActivationId()
+
+    PURPOSE: Gets the activation id.
+
+    RESULT: Activation id.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetActivationId: UnicodeString;
+
+(*
+    FUNCTION: GetActivationMode()
+
+    PURPOSE: Gets the mode of activation (online or offline).
+
+    RESULT: Activation mode.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetActivationMode: TActivationMode;
+
+(*
+    FUNCTION: GetLicenseOrganizationAddress()
+
+    PURPOSE: Gets the address associated with the license organization.
+
+    RESULT: Organization address.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELABufferSizeException
+*)
+
+function GetLicenseOrganizationAddress: TOrganizationAddress;
+
+(*
+    FUNCTION: GetUserLicenses()
+
+    PURPOSE: Gets the user licenses for the product.
+
+    This function sends a network request to Cryptlex servers to get the licenses.
+    Make sure AuthenticateUser() function is called before calling this function.
+
+    RESULT: User licenses for the product.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELAInetException, ELAServerException,
+    ELARateLimitException, ELAUserNotAuthenticatedException, ELABufferSizeException
+*)
+
+function GetUserLicenses: TArray<TUserLicense>;
+
+(*
     FUNCTION: GetLicenseExpiryDate()
 
     PURPOSE: Gets the license expiry date timestamp.
+    A value of 0 indicates it has no expiry i.e a lifetime license.
 
     RESULT: License expiry date timestamp
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException
     ELATimeException, ELATimeModifiedException
 *)
 
@@ -762,6 +1020,39 @@ function ActivateLicense: TLAKeyStatus;
 *)
 
 function ActivateLicenseOffline(const FilePath: UnicodeString): TLAKeyStatus;
+
+(*
+    FUNCTION: AuthenticateUser()
+
+    PURPOSE: It sends the request to the Cryptlex servers to authenticate the user.
+
+    PARAMETERS:
+    * Email - user email address.
+    * Password - user password.
+
+    RETURN CODES: lkOK, lkExpired, lkFail
+
+    EXCEPTIONS: ELAProductIdException, ELATwoFactorAuthenticationCodeMissingException, ELAInetException, ELARateLimitException,
+    ELATwoFactorAuthenticationCodeInvalidException, ELAAuthenticationFailedException, ELALoginTemporarilyLockedException, ELAServerException
+*)
+
+function AuthenticateUser(const Email , Password: UnicodeString): TLAKeyStatus;
+
+(*
+    FUNCTION: AuthenticateUserWithIdToken()
+
+    PURPOSE: Authenticates the user via OIDC Id token.
+
+    PARAMETERS:
+    * IdToken - The id token obtained from the OIDC provider.
+
+    RETURN CODES: lkOK, lkExpired, lkFail
+
+    EXCEPTIONS: ELAProductIdException, ELAInetException, ELAServerException, ELARateLimitException, ELAAuthenticationIdTokenInvalidException
+    ELAOIDCSSONotEnabledException, ELAUsersLimitReachedException
+*)
+
+function AuthenticateUserWithIdToken(const Token: UnicodeString): TLAKeyStatus;
 
 (*
     PROCEDURE: GenerateOfflineActivationRequest()
@@ -1595,6 +1886,22 @@ type
   public
     constructor Create;
   end;
+    (*
+        CODE: LA_E_RELEASE_PLATFORM_LENGTH
+        MESSAGE: Release platform length is more than 256 characters.
+    *)
+  ELAReleasePlatformLengthException = class(ELAException)
+  public
+    constructor Create;
+  end;
+    (*
+        CODE: LA_E_RELEASE_Channel_LENGTH
+        MESSAGE: Release channel length is more than 256 characters.
+    *)
+  ELAReleaseChannelLengthException = class(ELAException)
+  public
+    constructor Create;
+  end;
 
     (*
         CODE: LA_E_VM
@@ -1643,6 +1950,40 @@ type
   end;
 
     (*
+        CODE: LA_E_USER_NOT_AUTHENTICATED
+
+        MESSAGE: Application is being run inside a container and
+        activation has been disallowed in the container.
+    *)
+
+  ELAUserNotAuthenticatedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING
+
+        MESSAGE: The two-factor authentication code for the user authentication is missing.
+    *)
+
+  ELATwoFactorAuthenticationCodeMissingException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID
+
+        MESSAGE: The two-factor authentication code provided by the user is invalid.
+    *)
+
+  ELATwoFactorAuthenticationCodeInvalidException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
         CODE: LA_E_RATE_LIMIT
 
         MESSAGE: Rate limit for API has reached, try again later.
@@ -1671,6 +2012,50 @@ type
     *)
 
   ELAClientException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_LOGIN_TEMPORARILY_LOCKED
+
+        MESSAGE: The user account has been temporarily locked for 5 mins due to 5 failed attempts.
+    *)
+
+  ELALoginTemporarilyLockedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_AUTHENTICATION_ID_TOKEN_INVALID
+
+        MESSAGE: Invalid authentication ID token.
+    *)
+
+  ELAAuthenticationIdTokenInvalidException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_OIDC_SSO_NOT_ENABLED
+
+        MESSAGE: OIDC SSO is not enabled.
+    *)
+
+  ELAOIDCSSONotEnabledException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_USERS_LIMIT_REACHED
+
+        MESSAGE: The allowed users for this account has reached its limit.
+    *)
+
+  ELAUsersLimitReachedException = class(ELAException)
   public
     constructor Create;
   end;
@@ -2092,6 +2477,16 @@ const
     *)
   LA_E_FEATURE_FLAG_NOT_FOUND = TLAStatusCode(76);
     (*
+        CODE: LA_E_RELEASE_PLATFORM_LENGTH
+        MESSAGE: Release platform length is more than 256 characters.
+    *)
+  LA_E_RELEASE_PLATFORM_LENGTH = TLAStatusCode(78);
+    (*
+        CODE: LA_E_RELEASE_CHANNEL_LENGTH
+        MESSAGE: Release channel length is more than 256 characters.
+    *)
+  LA_E_RELEASE_CHANNEL_LENGTH = TLAStatusCode(79);
+    (*
         CODE: LA_E_VM
 
         MESSAGE: Application is being run inside a virtual machine / hypervisor,
@@ -2126,6 +2521,30 @@ const
   LA_E_CONTAINER = TLAStatusCode(83);
 
     (*
+        CODE: LA_E_USER_NOT_AUTHENTICATED
+
+        MESSAGE: The user is not authenticated.
+    *)
+
+  LA_E_USER_NOT_AUTHENTICATED = TLAStatusCode(87);
+
+    (*
+        CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING
+
+        MESSAGE: The two-factor authentication code for the user authentication is missing.
+    *)
+
+  LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING = TLAStatusCode(88);
+
+    (*
+        CODE: LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID
+
+        MESSAGE: The two-factor authentication code provided by the user is invalid.
+    *)
+
+  LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID = TLAStatusCode(89);
+
+    (*
         CODE: LA_E_RATE_LIMIT
 
         MESSAGE: Rate limit for API has reached, try again later.
@@ -2148,6 +2567,34 @@ const
     *)
 
   LA_E_CLIENT = TLAStatusCode(92);
+
+    (*
+        CODE: LA_E_LOGIN_TEMPORARILY_LOCKED
+
+        MESSAGE: The user account has been temporarily locked for 5 mins due to 5 failed attempts.
+    *)
+    LA_E_LOGIN_TEMPORARILY_LOCKED = TLAStatusCode(100);
+
+    (*
+        CODE: LA_E_AUTHENTICATION_ID_TOKEN_INVALID
+
+        MESSAGE: Invalid authentication ID token.
+    *)
+    LA_E_AUTHENTICATION_ID_TOKEN_INVALID = TLAStatusCode(101);
+
+    (*
+        CODE: LA_E_OIDC_SSO_NOT_ENABLED
+
+        MESSAGE: OIDC SSO is not enabled.
+    *)
+    LA_E_OIDC_SSO_NOT_ENABLED = TLAStatusCode(102);
+
+    (*
+        CODE: LA_E_USERS_LIMIT_REACHED
+
+        MESSAGE: The allowed users for this account has reached its limit.
+    *)
+    LA_E_USERS_LIMIT_REACHED = TLAStatusCode(103);
 
 (*********************************************************************************)
 
@@ -2211,6 +2658,56 @@ begin
   if not ELAError.CheckOKFail(Thin_SetLicenseKey(PWideChar(LicenseKey))) then
     raise
     ELAFailException.Create('Failed to set the license key');
+end;
+
+function Thin_SetReleaseVersion(const releaseVersion: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetReleaseVersion';
+
+procedure SetReleaseVersion(const ReleaseVersion: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetReleaseVersion(PWideChar(ReleaseVersion))) then
+    raise
+    ELAFailException.Create('Failed to set release version');
+end;
+
+function Thin_SetReleasePublishedDate(releasePublishedDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetReleasePublishedDate';
+
+procedure SetReleasePublishedDate(ReleasePublishedDate: LongWord);
+begin
+  if not ELAError.CheckOKFail(Thin_SetReleasePublishedDate(ReleasePublishedDate)) then
+    raise
+    ELAFailException.Create('Failed to set the release publish date');
+end;
+
+function Thin_SetDebugMode(enable: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetDebugMode';
+
+procedure SetDebugMode(Enable: LongWord);
+begin
+  if not ELAError.CheckOKFail(Thin_SetDebugMode(Enable)) then
+    raise
+    ELAFailException.Create('Failed to set the debug mode');
+end;
+
+function Thin_SetCacheMode(enable: Boolean): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetCacheMode';
+
+procedure SetCacheMode(Enable: Boolean);
+begin
+  if not ELAError.CheckOKFail(Thin_SetCacheMode(Enable)) then
+    raise
+    ELAFailException.Create('Failed to set the cache mode');
+end;
+
+function Thin_SetTwoFactorAuthenticationCode(const twoFactorAuthenticationCode: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetTwoFactorAuthenticationCode';
+
+procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetTwoFactorAuthenticationCode(PWideChar(TwoFactorAuthenticationCode))) then
+    raise
+    ELAFailException.Create('Failed to set the two factor authentication code');
 end;
 
 function Thin_SetLicenseUserCredential(const email, password: PWideChar): TLAStatusCode; cdecl;
@@ -2519,10 +3016,10 @@ begin
   end;
 end;
 
-function Thin_SetActivationLeaseDuration(leaseDuration: LongWord): TLAStatusCode; cdecl;
+function Thin_SetActivationLeaseDuration(leaseDuration: Int64): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'SetActivationLeaseDuration';
 
-procedure SetActivationLeaseDuration(LeaseDuration: LongWord);
+procedure SetActivationLeaseDuration(LeaseDuration: Int64);
 begin
   if not ELAError.CheckOKFail(Thin_SetActivationLeaseDuration(LeaseDuration)) then
     raise
@@ -2773,11 +3270,11 @@ begin
 end;
 
 function Thin_GetLicenseMeterAttribute
-  (const name: PWideChar; out allowedUses, totalUses, grossUses: LongWord): TLAStatusCode; cdecl;
+  (const name: PWideChar; out allowedUses: Int64; out totalUses, grossUses: UInt64): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseMeterAttribute';
 
 procedure GetLicenseMeterAttribute
-  (const Name: UnicodeString; out AllowedUses, TotalUses, GrossUses: LongWord);
+  (const Name: UnicodeString; out AllowedUses: Int64; TotalUses, GrossUses: UInt64);
 begin
   if not ELAError.CheckOKFail(Thin_GetLicenseMeterAttribute
     (PWideChar(Name), AllowedUses, TotalUses, GrossUses)) then
@@ -2820,10 +3317,10 @@ begin
     raise ELAFailException.Create('Failed to get the license key used for activation');
 end;
 
-function Thin_GetLicenseAllowedActivations(out allowedActivations: LongWord): TLAStatusCode; cdecl;
+function Thin_GetLicenseAllowedActivations(out allowedActivations: Int64): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetLicenseAllowedActivations';
 
-function GetLicenseAllowedActivations: LongWord;
+function GetLicenseAllowedActivations: Int64;
 begin
   if not ELAError.CheckOKFail(Thin_GetLicenseAllowedActivations(Result)) then
     raise
@@ -2838,6 +3335,394 @@ begin
   if not ELAError.CheckOKFail(Thin_GetLicenseTotalActivations(Result)) then
     raise
     ELAFailException.Create('Failed to get the total activations of the license');
+end;
+
+function Thin_GetLicenseAllowedDeactivations(out allowedDeactivations: Int64): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseAllowedDeactivations';
+
+function GetLicenseAllowedDeactivations: Int64;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseAllowedDeactivations(Result)) then
+    raise
+    ELAFailException.Create('Failed to get the allowed deactivations of the license');
+end;
+
+function Thin_GetLicenseTotalDeactivations(out totalDeactivations: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseTotalDeactivations';
+
+function GetLicenseTotalDeactivations: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseTotalDeactivations(Result)) then
+    raise
+    ELAFailException.Create('Failed to get the total deactivations of the license');
+end;
+
+function Thin_GetLicenseCreationDate(out creationDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseCreationDate';
+
+function GetLicenseCreationDate: TDateTime;
+var
+  creationDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseCreationDate(creationDate)) then
+    raise
+    ELAFailException.Create('Failed to get the license creation date');
+   Result := UnixToDateTime(creationDate);
+end;
+
+function Thin_GetLicenseActivationDate(out activationDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseActivationDate';
+
+function GetLicenseActivationDate: TDateTime;
+var
+  activationDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseActivationDate(activationDate)) then
+    raise
+    ELAFailException.Create('Failed to get the activation creation date');
+   Result := UnixToDateTime(activationDate);
+end;
+
+function Thin_GetLicenseMaintenanceExpiryDate(out maintenanceExpiryDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseMaintenanceExpiryDate';
+
+function GetLicenseMaintenanceExpiryDate: TDateTime;
+var
+  maintenanceExpiryDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseMaintenanceExpiryDate(maintenanceExpiryDate)) then
+    raise
+    ELAFailException.Create('Failed to get the maintenance expiry date');
+   Result := UnixToDateTime(maintenanceExpiryDate);
+end;
+
+function Thin_GetLicenseMaxAllowedReleaseVersion(out releaseVersion; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseMaxAllowedReleaseVersion';
+
+function GetLicenseMaxAllowedReleaseVersion: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseMaxAllowedReleaseVersion(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseMaxAllowedReleaseVersion(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the max allowed release version');
+end;
+
+function Thin_GetLicenseOrganizationName(out organizationName; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseOrganizationName';
+
+function GetLicenseOrganizationName: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseOrganizationName(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseOrganizationName(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get organization name');
+end;
+
+function Thin_GetActivationId(out activationId; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetActivationId';
+
+function GetActivationId: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetActivationId(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetActivationId(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get activation id');
+end;
+
+function Thin_GetActivationMode(initialMode: PWideChar; initialModeLength: LongWord;
+  currentMode: PWideChar; currentModeLength: LongWord): Integer; cdecl;
+  external LexActivator_DLL name 'GetActivationMode';
+
+function GetActivationMode: TActivationMode;
+var
+  ErrorCode: TLAStatusCode;
+  ActivationMode: TActivationMode;
+
+  function Try256: Boolean;
+  var
+    InitialBuffer, CurrentBuffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetActivationMode(InitialBuffer, Length(InitialBuffer), CurrentBuffer, Length(CurrentBuffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then
+    begin
+      ActivationMode.InitialMode := InitialBuffer;
+      ActivationMode.CurrentMode := CurrentBuffer;
+    end;
+  end;
+
+  function TryHigh: Boolean;
+  var
+    InitialBuffer, CurrentBuffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(InitialBuffer, Size);
+      SetLength(CurrentBuffer, Size);
+      ErrorCode := Thin_GetActivationMode(PWideChar(InitialBuffer), Size, PWideChar(CurrentBuffer), Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then
+    begin
+      ActivationMode.InitialMode := PWideChar(InitialBuffer);
+      ActivationMode.CurrentMode := PWideChar(CurrentBuffer);
+    end;
+  end;
+
+begin
+  if not Try256 then
+    TryHigh;
+
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the activation mode.');
+
+  Result := ActivationMode;
+end;
+
+function Thin_GetLicenseOrganizationAddress(out organizationAddress; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseOrganizationAddressInternal';
+
+function GetLicenseOrganizationAddress: TOrganizationAddress;
+var
+  ErrorCode: TLAStatusCode;
+  JSONString: UnicodeString;
+  JSONObject: TJSONObject;
+
+  // Internal helper functions to handle buffer sizes
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseOrganizationAddress(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseOrganizationAddress(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+
+begin
+  if not Try256(JSONString) then TryHigh(JSONString);
+
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get organization address linked to license');
+
+  Result:= Default(TOrganizationAddress);
+
+  if JSONString <> '' then
+  begin
+    try
+      JSONObject := TJSONObject.ParseJSONValue(JSONString) as TJSONObject;
+      if JSONObject <> nil then
+      try
+        JSONObject.TryGetValue('AddressLine1', Result.AddressLine1);
+        JSONObject.TryGetValue('AddressLine2', Result.AddressLine2);
+        JSONObject.TryGetValue('City', Result.City);
+        JSONObject.TryGetValue('State', Result.State);
+        JSONObject.TryGetValue('Country', Result.Country);
+        JSONObject.TryGetValue('PostCode', Result.PostCode);
+      finally
+        JSONObject.Free;
+      end
+      else
+        raise Exception.Create('Error while parsing JSON: Invalid JSON data');
+    except
+      on E: Exception do
+      begin
+        raise Exception.Create('Error while parsing JSON: ' + E.Message);
+      end;
+    end;
+  end;
+end;
+
+function Thin_GetUserLicenses(out userLicenses; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetUserLicensesInternal';
+
+function GetUserLicenses: TArray<TUserLicense>;
+var
+  ErrorCode: TLAStatusCode;
+  JSONString: UnicodeString;
+  JSONArray: TJSONArray;
+  LicenseItem: TUserLicense;
+  MetadataArray: TJSONArray;
+  MetadataItem: TJSONObject;
+  Metadata: TMetadata;
+  I, J: Integer;
+
+  function GetJSONStrValue(const JSONObject: TJSONObject; const FieldName: string): string;
+  var
+    JSONValue: TJSONValue;
+  begin
+    Result := '';
+    JSONValue := JSONObject.GetValue(FieldName);
+    if JSONValue <> nil then
+      Result := JSONValue.Value;
+  end;
+
+  function GetJSONInt64Value(const JSONObject: TJSONObject; const FieldName: string): Int64;
+  var
+    JSONValue: TJSONValue;
+  begin
+    Result := 0;
+    JSONValue := JSONObject.GetValue(FieldName);
+    if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
+      Exit;
+  end;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0..255] of WideChar;
+  begin
+    ErrorCode := Thin_GetUserLicenses(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then
+      OuterResult := Buffer;
+  end;
+
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetUserLicenses(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then
+      OuterResult := PWideChar(Buffer);
+  end;
+
+begin
+  Result := nil;
+
+  if not Try256(JSONString) then
+    if not TryHigh(JSONString) then
+      raise Exception.Create('Failed to fetch user licenses: Unable to retrieve data.');
+
+  if ErrorCode <> LA_OK then
+    raise Exception.Create('Failed to get user licenses. Error code: ' + IntToStr(ErrorCode));
+
+  JSONArray := TJSONObject.ParseJSONValue(JSONString) as TJSONArray;
+  if JSONArray = nil then
+    raise Exception.Create('Error while parsing JSON: Invalid JSON data or empty JSON array');
+
+  try
+    SetLength(Result, JSONArray.Count);
+    for I := 0 to JSONArray.Count - 1 do
+    begin
+      LicenseItem := Default(TUserLicense);
+      
+      LicenseItem.Key := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'key');
+      LicenseItem.&Type := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'key');
+      LicenseItem.AllowedActivations := GetJSONInt64Value(JSONArray.Items[I] as TJSONObject, 'allowedActivations');
+      LicenseItem.AllowedDeactivations := GetJSONInt64Value(JSONArray.Items[I] as TJSONObject, 'allowedDeactivations');
+      MetadataArray := (JSONArray.Items[I] as TJSONObject).GetValue('metadata') as TJSONArray;
+      if MetadataArray <> nil then
+      begin
+        SetLength(LicenseItem.Metadata, MetadataArray.Count);
+        for J := 0 to MetadataArray.Count - 1 do
+        begin
+          MetadataItem := MetadataArray.Items[J] as TJSONObject;
+          Metadata.Key := GetJSONStrValue(MetadataItem, 'key');
+          Metadata.Value := GetJSONStrValue(MetadataItem, 'value');
+          LicenseItem.Metadata[J] := Metadata;
+        end;
+      end;
+
+      Result[I] := LicenseItem;
+    end;
+  finally
+    JSONArray.Free;
+  end;
 end;
 
 function Thin_GetLicenseExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
@@ -3317,6 +4202,22 @@ begin
   Result := ELAError.CheckKeyStatus(Thin_ActivateLicenseOffline(PWideChar(FilePath)));
 end;
 
+function Thin_AuthenticateUser(const email , password : PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'AuthenticateUser';
+
+function AuthenticateUser(const Email , Password : unicodestring): TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_AuthenticateUser(PWideChar(Email),PWideChar(Password)));
+end;
+
+function Thin_AuthenticateUserWithIdToken(const token : PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'AuthenticateUserWithIdToken';
+
+function AuthenticateUserWithIdToken(const Token : unicodestring): TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_AuthenticateUserWithIdToken(PWideChar(Token)));
+end;
+
 function Thin_GenerateOfflineActivationRequest(const filePath: PWideChar): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GenerateOfflineActivationRequest';
 
@@ -3508,13 +4409,22 @@ begin
     LA_E_CUSTOM_FINGERPRINT_LENGTH: Result := ELACustomFingerprintLengthException.Create;
     LA_E_PRODUCT_VERSION_NOT_LINKED: Result := ELAProductVersionNotLinkedException.Create;
     LA_E_FEATURE_FLAG_NOT_FOUND: Result := ELAFeatureFlagNotFoundException.Create;
+    LA_E_RELEASE_PLATFORM_LENGTH: Result := ELAReleasePlatformLengthException.Create;
+    LA_E_RELEASE_CHANNEL_LENGTH: Result := ELAReleaseChannelLengthException.Create;
     LA_E_VM: Result := ELAVMException.Create;
     LA_E_COUNTRY: Result := ELACountryException.Create;
     LA_E_IP: Result := ELAIPException.Create;
     LA_E_CONTAINER: Result := ELAContainerException.Create;
+    LA_E_USER_NOT_AUTHENTICATED: Result := ELAUserNotAuthenticatedException.Create;
+    LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING: Result := ELATwoFactorAuthenticationCodeMissingException.Create;
+    LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID: Result := ELATwoFactorAuthenticationCodeInvalidException.Create;
     LA_E_RATE_LIMIT: Result := ELARateLimitException.Create;
     LA_E_SERVER: Result := ELAServerException.Create;
     LA_E_CLIENT: Result := ELAClientException.Create;
+    LA_E_LOGIN_TEMPORARILY_LOCKED: Result := ELALoginTemporarilyLockedException.Create;
+    LA_E_AUTHENTICATION_ID_TOKEN_INVALID: Result := ELAAuthenticationIdTokenInvalidException.Create;
+    LA_E_OIDC_SSO_NOT_ENABLED: Result := ELAOIDCSSONotEnabledException.Create;
+    LA_E_USERS_LIMIT_REACHED: Result := ELAUsersLimitReachedException.Create;
   else
     Result := ELAUnknownErrorCodeException.Create(ErrorCode);
   end;
@@ -3868,6 +4778,18 @@ begin
   FErrorCode := LA_E_FEATURE_FLAG_NOT_FOUND;
 end;
 
+constructor ELAReleasePlatformLengthException.Create;
+begin
+  inherited Create('Release platform length is more than 256 characters..');
+  FErrorCode := LA_E_RELEASE_PLATFORM_LENGTH;
+end;
+
+constructor ELAReleaseChannelLengthException.Create;
+begin
+  inherited Create('Release channel length is more than 256 characters..');
+  FErrorCode := LA_E_RELEASE_CHANNEL_LENGTH;
+end;
+
 constructor ELAVMException.Create;
 begin
   inherited Create('Application is being run inside a virtual machine / hypervisor, ' +
@@ -3894,6 +4816,24 @@ begin
   FErrorCode := LA_E_CONTAINER;
 end;
 
+constructor ELAUserNotAuthenticatedException.Create;
+begin
+  inherited Create('The user is not authenticated.');
+  FErrorCode := LA_E_USER_NOT_AUTHENTICATED;
+end;
+
+constructor ELATwoFactorAuthenticationCodeMissingException.Create;
+begin
+  inherited Create('The two-factor authentication code for the user authentication is missing.');
+  FErrorCode := LA_E_TWO_FACTOR_AUTHENTICATION_CODE_MISSING;
+end;
+
+constructor ELATwoFactorAuthenticationCodeInvalidException.Create;
+begin
+  inherited Create('The two-factor authentication code provided by the user is invalid.');
+  FErrorCode := LA_E_TWO_FACTOR_AUTHENTICATION_CODE_INVALID;
+end;
+
 constructor ELARateLimitException.Create;
 begin
   inherited Create('Rate limit for API has reached, try again later');
@@ -3912,6 +4852,30 @@ begin
   FErrorCode := LA_E_CLIENT;
 end;
 
+constructor ELALoginTemporarilyLockedException.Create;
+begin
+  inherited Create('The user account has been temporarily locked for 5 mins due to 5 failed attempts');
+  FErrorCode := LA_E_LOGIN_TEMPORARILY_LOCKED;
+end;
+
+constructor ELAAuthenticationIdTokenInvalidException.Create;
+begin
+  inherited Create('Invalid authentication ID token');
+  FErrorCode := LA_E_AUTHENTICATION_ID_TOKEN_INVALID;
+end;
+
+constructor ELAOIDCSSONotEnabledException.Create;
+begin
+  inherited Create('OIDC SSO is not enabled');
+  FErrorCode := LA_E_OIDC_SSO_NOT_ENABLED;
+end;
+
+constructor ELAUsersLimitReachedException.Create;
+begin
+  inherited Create('The allowed users for this account has reached its limit');
+  FErrorCode := LA_E_USERS_LIMIT_REACHED;
+end;
+
 initialization
   InitializeCriticalSection(LALicenseCallbackMutex[lciSetLicenseCallback]);
   InitializeCriticalSection(LALicenseCallbackMutex[lciCheckForReleaseUpdate]);
@@ -3921,4 +4885,3 @@ finalization
   DeleteCriticalSection(LALicenseCallbackMutex[lciCheckForReleaseUpdate]);
   DeleteCriticalSection(LALicenseCallbackMutex[lciSetLicenseCallback]);
 end.
-
