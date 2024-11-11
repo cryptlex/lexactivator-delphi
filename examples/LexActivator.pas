@@ -139,9 +139,21 @@ procedure SetProductData(const ProductData: UnicodeString);
     * ProductId - the unique product id of your application as mentioned
       on the product page in the dashboard.
 
-    * Flags - depending upon whether your application requires admin/root
-      permissions to run or not, this parameter can have one of the following
-      values: lfSystem, lfUser, lfInMemory, lfAllUser
+    * Flags - depending on your application's requirements, choose one of 
+      the following values: 
+      
+       - lfSystem: This flag indicates that the application must be run with admin or 
+        root permissions.
+
+       - lfUser: This flag indicates that the application does not require
+        admin or root permissions to run.
+       
+       - lfInMemory: This flag will store activation data in memory. Thus, requires 
+        re-activation on every start of the application and should only be used in floating
+        licenses.
+       
+       - lfAllUsers: This flag is specifically designed for Windows and should be used 
+        for system-wide activations. 
 
     EXCEPTIONS: ELAWMICException, ELAProductFileException,
     ELAProductDataException, ELAProductIdException,
