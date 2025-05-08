@@ -541,7 +541,7 @@ function GetLicenseEntitlementSetDisplayName: UnicodeString;
 (*
     FUNCTION: GetLicenseEntitlements()
 
-    PURPOSE: GGets the feature entitlements associated with the license.
+    PURPOSE: Gets the feature entitlements associated with the license.
 
     Feature entitlements can be linked directly to a license (license feature entitlements) 
     or via entitlement sets. If a feature entitlement is defined in both, the value from 
@@ -554,7 +554,7 @@ function GetLicenseEntitlementSetDisplayName: UnicodeString;
     ELAFeatureEntitlementsInvalidException
 *)
 
-function GetLicenseEntitlements: TArray<TFeatureEntitlement>;
+function GetFeatureEntitlements: TArray<TFeatureEntitlement>;
 
 (*
     FUNCTION: GetLicenseEntitlement()
@@ -575,7 +575,7 @@ function GetLicenseEntitlements: TArray<TFeatureEntitlement>;
     ELAFeatureEntitlementNotFoundException, ELAFeatureEntitlementsInvalidException
 *)
 
-function GetLicenseEntitlement(const FeatureName: UnicodeString): TFeatureEntitlement;
+function GetFeatureEntitlement(const FeatureName: UnicodeString): TFeatureEntitlement;
 
 (*
     FUNCTION: GetProductVersionName()
@@ -3564,14 +3564,15 @@ begin
     raise ELAFailException.Create('Failed to get the license entitlement set display name');
 end;
 
-function Thin_GetFeatureEntitlement(const name: PWideChar; out featureEntitlement; length: LongWord): TLAStatusCode; cdecl;
+function Thin_GetFeatureEntitlement(const featureName: PWideChar; out featureEntitlement; length: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetFeatureEntitlementInternal';
 
-function GetFeatureEntitlement(const name: UnicodeString): TFeatureEntitlement;
+function GetFeatureEntitlement(const FeatureName: UnicodeString): TFeatureEntitlement;
 var
   ErrorCode: TLAStatusCode;
   JSONString: UnicodeString;
   JSONObject: TJSONObject;
+  FeatureEntitlement: TFeatureEntitlement;
 
   function GetJSONStrValue(const JSONObject: TJSONObject; const FieldName: string): string;
   var
@@ -3587,7 +3588,7 @@ var
   var
     Buffer: array[0 .. 255] of WideChar;
   begin
-    ErrorCode := Thin_GetFeatureEntitlement(PWideChar(name), Buffer, Length(Buffer));
+    ErrorCode := Thin_GetFeatureEntitlement(PWideChar(FeatureName), Buffer, Length(Buffer));
     Result := ErrorCode <> LA_E_BUFFER_SIZE;
     if ErrorCode = LA_OK then
       OuterResult := Buffer;
@@ -3602,7 +3603,7 @@ var
     repeat
       Size := Size * 2;
       SetLength(Buffer, Size);
-      ErrorCode := Thin_GetFeatureEntitlement(PWideChar(name), PWideChar(Buffer)^, Size);
+      ErrorCode := Thin_GetFeatureEntitlement(PWideChar(FeatureName), PWideChar(Buffer)^, Size);
       Result := ErrorCode <> LA_E_BUFFER_SIZE;
     until Result or (Size >= 128 * 1024);
     if ErrorCode = LA_OK then
