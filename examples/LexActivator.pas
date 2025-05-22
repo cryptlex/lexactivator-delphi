@@ -769,6 +769,21 @@ function GetLicenseOrganizationAddress: TOrganizationAddress;
 function GetUserLicenses: TArray<TUserLicense>;
 
 (*
+    FUNCTION: GetActivationLastSyncedDate()
+
+    PURPOSE: Gets the activation last synced date timestamp.
+
+    Initially, this timestamp matches the activation creation date, and then updates with each successful server sync.
+
+    RESULT: Activation last synced date timestamp.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
+*)
+
+function GetActivationLastSyncedDate: TDateTime;
+
+(*
     FUNCTION: GetLicenseExpiryDate()
 
     PURPOSE: Gets the license expiry date timestamp.
@@ -3735,6 +3750,19 @@ begin
   finally
     JSONArray.Free;
   end;
+end;
+
+function Thin_GetActivationLastSyncedDate(out lastSyncedDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetActivationLastSyncedDate';
+
+function GetActivationLastSyncedDate: TDateTime;
+var
+  LastSyncedDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetActivationLastSyncedDate(LastSyncedDate)) then
+    raise
+    ELAFailException.Create('Failed to get the activation last synced date timestamp');
+  Result := UnixToDateTime(LastSyncedDate);
 end;
 
 function Thin_GetLicenseExpiryDate(out expiryDate: LongWord): TLAStatusCode; cdecl;
