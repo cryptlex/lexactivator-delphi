@@ -39,7 +39,7 @@ begin
   try
     Step := 'SetProductData'; SetProductData(ProductData);
     Step := 'SetProductId'; SetProductId(ProductId, lfUser);
-    Step := 'SetAppVersion'; SetAppVersion('PASTE_YOUR_APP_VERION');
+    Step := 'SetReleaseVersion'; SetReleaseVersion('PASTE_YOUR_RELEASE_VERSION');
   except
     on E: Exception do
     begin

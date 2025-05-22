@@ -82,6 +82,13 @@ type
     CurrentMode: UnicodeString;
 end;
 
+type
+  TFeatureEntitlement = record
+    FeatureName: UnicodeString;
+    FeatureDisplayName: UnicodeString;
+    Value: UnicodeString;
+  end;
+
 function LAFlagsToString(Item: TLAFlags): string;
 function LAKeyStatusToString(Item: TLAKeyStatus): string;
 
@@ -504,9 +511,78 @@ procedure SetCryptlexHost(const Host: UnicodeString);
 function GetProductMetadata(const Key: UnicodeString): UnicodeString;
 
 (*
+    FUNCTION: GetLicenseEntitlementSetName()
+
+    PURPOSE: Gets the license entitlement set name.
+
+    RESULT: License entitlement set name.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELAEntitlementSetNotLinkedException,
+    ELABufferSizeException
+*)
+
+function GetLicenseEntitlementSetName: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseEntitlementSetDisplayName()
+
+    PURPOSE: Gets the license entitlement set display name.
+
+    RESULT: License entitlement set display name.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELAEntitlementSetNotLinkedException,
+    ELABufferSizeException
+*)
+
+function GetLicenseEntitlementSetDisplayName: UnicodeString;
+
+(*
+    FUNCTION: GetLicenseEntitlements()
+
+    PURPOSE: Gets the feature entitlements associated with the license.
+
+    Feature entitlements can be linked directly to a license (license feature entitlements) 
+    or via entitlement sets. If a feature entitlement is defined in both, the value from 
+    the license feature entitlement takes precedence, overriding the entitlement set value.
+
+    RESULT: Array of feature entitlements.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException, 
+    ELATimeModifiedException, ELABufferSizeException,
+    ELAFeatureEntitlementsInvalidException
+*)
+
+function GetFeatureEntitlements: TArray<TFeatureEntitlement>;
+
+(*
+    FUNCTION: GetLicenseEntitlement()
+
+    PURPOSE: Gets the feature entitlement associated with the license.
+
+    Feature entitlements can be linked directly to a license (license feature entitlements) 
+    or via entitlement sets. If a feature entitlement is defined in both, the value from 
+    the license feature entitlement takes precedence, overriding the entitlement set value.
+
+    PARAMETERS:
+    * FeatureName - name of the feature entitlement
+
+    RESULT: Feature entitlement.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException, 
+    ELATimeModifiedException, ELABufferSizeException, 
+    ELAFeatureEntitlementNotFoundException, ELAFeatureEntitlementsInvalidException
+*)
+
+function GetFeatureEntitlement(const FeatureName: UnicodeString): TFeatureEntitlement;
+
+(*
     FUNCTION: GetProductVersionName()
 
     PURPOSE: Gets the product version name.
+
+    This function is deprecated. Use GetLicenseEntitlementSetName() instead.
 
     RESULT: Product version name.
 
@@ -522,6 +598,8 @@ function GetProductVersionName: UnicodeString;
 
     PURPOSE: Gets the product version display name.
 
+    This function is deprecated. Use GetLicenseEntitlementSetDisplayName() instead.
+
     RESULT: Product version display name.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
@@ -535,6 +613,8 @@ function GetProductVersionDisplayName: UnicodeString;
     FUNCTION: GetProductVersionFeatureFlag()
 
     PURPOSE: Gets the product version feature flag.
+
+    This function is deprecated. Use GetFeatureEntitlement() instead.
 
     PARAMETERS:
     * Name - name of the feature flag
@@ -2044,6 +2124,17 @@ type
   end;
 
     (*
+        CODE: LA_E_ACCOUNT_ID
+
+        MESSAGE: Invalid account ID.
+    *)
+
+  ELAAccountIdException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
         CODE: LA_E_LOGIN_TEMPORARILY_LOCKED
 
         MESSAGE: The user account has been temporarily locked for 5 mins due to 5 failed attempts.
@@ -2083,6 +2174,83 @@ type
     *)
 
   ELAUsersLimitReachedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_OS_USER
+
+        MESSAGE: OS user has changed since activation and the license is user-locked.
+    *)
+
+  ELAOSUserException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_INVALID_PERMISSION_FLAG
+
+      MESSAGE: Invalid permission flag.
+    *)
+
+  ELAInvalidPermissionFlagException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_FREE_PLAN_ACTIVATION_LIMIT_REACHED
+
+        MESSAGE: The free plan has reached it's activation limit.
+    *)
+
+  ELAFreePlanActivationLimitReachedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_FEATURE_ENTITLEMENTS_INVALID
+
+        MESSAGE: Invalid feature entitlements.
+    *)
+
+  ELAFeatureEntitlementsInvalidException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_FEATURE_ENTITLEMENT_NOT_FOUND
+
+        MESSAGE: The feature entitlement does not exist.
+    *)
+
+  ELAFeatureEntitlementNotFoundException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_ENTITLEMENT_SET_NOT_LINKED
+
+        MESSAGE: No entitlement set is linked to the license.
+    *)
+
+  ELAEntitlementSetNotLinkedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_LICENSE_NOT_EFFECTIVE
+
+        MESSAGE: The license cannot be activated before its effective date.
+    *)
+
+  ELALicenseNotEffectiveException = class(ELAException)
   public
     constructor Create;
   end;
@@ -2495,24 +2663,36 @@ const
 
     (*
         CODE: LA_E_PRODUCT_VERSION_NOT_LINKED
+
         MESSAGE: No product version is linked with the license.
     *)
+
   LA_E_PRODUCT_VERSION_NOT_LINKED = TLAStatusCode(75);
+
     (*
         CODE: LA_E_FEATURE_FLAG_NOT_FOUND
+
         MESSAGE: The product version feature flag does not exist.
     *)
+
   LA_E_FEATURE_FLAG_NOT_FOUND = TLAStatusCode(76);
+
     (*
         CODE: LA_E_RELEASE_PLATFORM_LENGTH
+
         MESSAGE: Release platform length is more than 256 characters.
     *)
+
   LA_E_RELEASE_PLATFORM_LENGTH = TLAStatusCode(78);
+
     (*
         CODE: LA_E_RELEASE_CHANNEL_LENGTH
+
         MESSAGE: Release channel length is more than 256 characters.
     *)
+
   LA_E_RELEASE_CHANNEL_LENGTH = TLAStatusCode(79);
+
     (*
         CODE: LA_E_VM
 
@@ -2596,32 +2776,100 @@ const
   LA_E_CLIENT = TLAStatusCode(92);
 
     (*
+        CODE: LA_E_ACCOUNT_ID
+
+        MESSAGE: Invalid account ID.
+    *)
+
+  LA_E_ACCOUNT_ID = TLAStatusCode(93);
+  
+    (*
         CODE: LA_E_LOGIN_TEMPORARILY_LOCKED
 
         MESSAGE: The user account has been temporarily locked for 5 mins due to 5 failed attempts.
     *)
-    LA_E_LOGIN_TEMPORARILY_LOCKED = TLAStatusCode(100);
+
+  LA_E_LOGIN_TEMPORARILY_LOCKED = TLAStatusCode(100);
 
     (*
         CODE: LA_E_AUTHENTICATION_ID_TOKEN_INVALID
 
         MESSAGE: Invalid authentication ID token.
     *)
-    LA_E_AUTHENTICATION_ID_TOKEN_INVALID = TLAStatusCode(101);
+
+  LA_E_AUTHENTICATION_ID_TOKEN_INVALID = TLAStatusCode(101);
 
     (*
         CODE: LA_E_OIDC_SSO_NOT_ENABLED
 
         MESSAGE: OIDC SSO is not enabled.
     *)
-    LA_E_OIDC_SSO_NOT_ENABLED = TLAStatusCode(102);
+
+  LA_E_OIDC_SSO_NOT_ENABLED = TLAStatusCode(102);
 
     (*
         CODE: LA_E_USERS_LIMIT_REACHED
 
         MESSAGE: The allowed users for this account has reached its limit.
     *)
-    LA_E_USERS_LIMIT_REACHED = TLAStatusCode(103);
+
+  LA_E_USERS_LIMIT_REACHED = TLAStatusCode(103);
+
+    (*
+        CODE: LA_E_OS_USER
+
+        MESSAGE: OS user has changed since activation and the license is user-locked.
+    *)
+
+  LA_E_OS_USER = TLAStatusCode(104);
+
+    (*
+        CODE: LA_E_INVALID_PERMISSION_FLAG
+
+        MESSAGE: Invalid permission flag.
+    *)
+
+  LA_E_INVALID_PERMISSION_FLAG = TLAStatusCode(105);
+
+    (*
+        CODE: LA_E_FREE_PLAN_ACTIVATION_LIMIT_REACHED
+
+        MESSAGE: The free plan has reached it's activation limit.
+    *)
+
+  LA_E_FREE_PLAN_ACTIVATION_LIMIT_REACHED = TLAStatusCode(106);
+
+    (*
+        CODE: LA_E_FEATURE_ENTITLEMENTS_INVALID
+
+        MESSAGE: Invalid feature entitlements.
+    *)
+
+  LA_E_FEATURE_ENTITLEMENTS_INVALID = TLAStatusCode(107);
+
+    (*
+        CODE: LA_E_FEATURE_ENTITLEMENT_NOT_FOUND
+
+        MESSAGE: The feature entitlement does not exist.
+    *)
+
+  LA_E_FEATURE_ENTITLEMENT_NOT_FOUND = TLAStatusCode(108);
+
+    (*
+        CODE: LA_E_ENTITLEMENT_SET_NOT_LINKED
+
+        MESSAGE: No entitlement set is linked to the license.
+    *)
+
+  LA_E_ENTITLEMENT_SET_NOT_LINKED = TLAStatusCode(109);
+
+    (*
+        CODE: LA_E_LICENSE_NOT_EFFECTIVE
+
+        MESSAGE: The license cannot be activated before its effective date.
+    *)
+
+  LA_E_LICENSE_NOT_EFFECTIVE = TLAStatusCode(110);
 
 (*********************************************************************************)
 
@@ -3259,6 +3507,218 @@ begin
   if not ELAError.CheckOKFail(ErrorCode) then
     raise ELAFailException.Create('Failed to get the product version feature flag');
   Result := Enabled <> 0;
+end;
+
+function Thin_GetLicenseEntitlementSetName(out name; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseEntitlementSetName';
+
+function GetLicenseEntitlementSetName: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseEntitlementSetName(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseEntitlementSetName(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the license entitlement set name');
+end;
+
+function Thin_GetLicenseEntitlementSetDisplayName(out displayName; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseEntitlementSetDisplayName';
+
+function GetLicenseEntitlementSetDisplayName: UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetLicenseEntitlementSetDisplayName(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then OuterResult := Buffer;
+  end;
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, 0);
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetLicenseEntitlementSetDisplayName(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then OuterResult := PWideChar(Buffer);
+  end;
+begin
+  if not Try256(Result) then TryHigh(Result);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the license entitlement set display name');
+end;
+
+function Thin_GetFeatureEntitlement(const featureName: PWideChar; out featureEntitlement; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetFeatureEntitlementInternal';
+
+function GetFeatureEntitlement(const FeatureName: UnicodeString): TFeatureEntitlement;
+var
+  ErrorCode: TLAStatusCode;
+  JSONString: UnicodeString;
+  JSONObject: TJSONObject;
+  FeatureEntitlement: TFeatureEntitlement;
+
+  function GetJSONStrValue(const JSONObject: TJSONObject; const FieldName: string): string;
+  var
+    JSONValue: TJSONValue;
+  begin
+    Result := '';
+    JSONValue := JSONObject.GetValue(FieldName);
+    if JSONValue <> nil then
+      Result := JSONValue.Value;
+  end;
+
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0 .. 255] of WideChar;
+  begin
+    ErrorCode := Thin_GetFeatureEntitlement(PWideChar(FeatureName), Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then
+      OuterResult := Buffer;
+  end;
+
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetFeatureEntitlement(PWideChar(FeatureName), PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then
+      OuterResult := PWideChar(Buffer);
+  end;
+
+begin
+  if not Try256(JSONString) then TryHigh(JSONString);
+
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get feature entitlement');
+
+  JSONObject := TJSONObject.ParseJSONValue(JSONString) as TJSONObject;
+
+  try
+    FeatureEntitlement.FeatureName := GetJSONStrValue(JSONObject, 'featureName');
+    FeatureEntitlement.FeatureDisplayName := GetJSONStrValue(JSONObject, 'featureDisplayName');
+    FeatureEntitlement.Value := GetJSONStrValue(JSONObject, 'value');
+  finally
+    JSONObject.Free;
+  end;
+
+  Result := FeatureEntitlement;
+end;
+
+
+function Thin_GetFeatureEntitlements(out featureEntitlements; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetFeatureEntitlementsInternal';
+
+function GetFeatureEntitlements: TArray<TFeatureEntitlement>;
+var
+  ErrorCode: TLAStatusCode;
+  JSONString: UnicodeString;
+  JSONArray: TJSONArray;
+  FeatureEntitlement: TFeatureEntitlement;
+  I: Integer;
+
+  function GetJSONStrValue(const JSONObject: TJSONObject; const FieldName: string): string;
+  var
+    JSONValue: TJSONValue;
+  begin
+    Result := '';
+    JSONValue := JSONObject.GetValue(FieldName);
+    if JSONValue <> nil then
+      Result := JSONValue.Value;
+  end;
+
+  function Try256(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: array[0..255] of WideChar;
+  begin
+    ErrorCode := Thin_GetFeatureEntitlements(Buffer, Length(Buffer));
+    Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    if ErrorCode = LA_OK then
+      OuterResult := Buffer;
+  end;
+
+  function TryHigh(var OuterResult: UnicodeString): Boolean;
+  var
+    Buffer: UnicodeString;
+    Size: Integer;
+  begin
+    Size := 512;
+    repeat
+      Size := Size * 2;
+      SetLength(Buffer, Size);
+      ErrorCode := Thin_GetFeatureEntitlements(PWideChar(Buffer)^, Size);
+      Result := ErrorCode <> LA_E_BUFFER_SIZE;
+    until Result or (Size >= 128 * 1024);
+    if ErrorCode = LA_OK then
+      OuterResult := PWideChar(Buffer);
+  end;
+
+begin
+  Result := nil;
+  if not Try256(JSONString) then TryHigh(JSONString);
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get feature entitlements');
+
+  // If JSON string is empty, return empty array
+  if JSONString = '' then
+    Exit;
+
+  JSONArray := TJSONObject.ParseJSONValue(JSONString) as TJSONArray;
+  try
+    if JSONArray <> nil then
+    begin
+      SetLength(Result, JSONArray.Count);
+      for I := 0 to JSONArray.Count - 1 do
+      begin
+        FeatureEntitlement := Default(TFeatureEntitlement);
+        FeatureEntitlement.FeatureName := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'featureName');
+        FeatureEntitlement.FeatureDisplayName := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'featureDisplayName');
+        FeatureEntitlement.Value := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'value');
+        Result[I] := FeatureEntitlement;
+      end;
+    end;
+  finally
+    JSONArray.Free;
+  end;
 end;
 
 function Thin_GetLicenseMetadata(const key: UnicodeString; out value; length: LongWord): TLAStatusCode; cdecl;
@@ -4461,10 +4921,18 @@ begin
     LA_E_RATE_LIMIT: Result := ELARateLimitException.Create;
     LA_E_SERVER: Result := ELAServerException.Create;
     LA_E_CLIENT: Result := ELAClientException.Create;
+    LA_E_ACCOUNT_ID: Result := ELAAccountIdException.Create;
     LA_E_LOGIN_TEMPORARILY_LOCKED: Result := ELALoginTemporarilyLockedException.Create;
     LA_E_AUTHENTICATION_ID_TOKEN_INVALID: Result := ELAAuthenticationIdTokenInvalidException.Create;
     LA_E_OIDC_SSO_NOT_ENABLED: Result := ELAOIDCSSONotEnabledException.Create;
     LA_E_USERS_LIMIT_REACHED: Result := ELAUsersLimitReachedException.Create;
+    LA_E_OS_USER: Result := ELAOSUserException.Create;
+    LA_E_INVALID_PERMISSION_FLAG: Result := ELAInvalidPermissionFlagException.Create;
+    LA_E_FREE_PLAN_ACTIVATION_LIMIT_REACHED: Result := ELAFreePlanActivationLimitReachedException.Create;
+    LA_E_FEATURE_ENTITLEMENTS_INVALID: Result := ELAFeatureEntitlementsInvalidException.Create;
+    LA_E_FEATURE_ENTITLEMENT_NOT_FOUND: Result := ELAFeatureEntitlementNotFoundException.Create;
+    LA_E_ENTITLEMENT_SET_NOT_LINKED: Result := ELAEntitlementSetNotLinkedException.Create;
+    LA_E_LICENSE_NOT_EFFECTIVE: Result := ELALicenseNotEffectiveException.Create;
   else
     Result := ELAUnknownErrorCodeException.Create(ErrorCode);
   end;
@@ -4892,6 +5360,12 @@ begin
   FErrorCode := LA_E_CLIENT;
 end;
 
+constructor ELAAccountIdException.Create;
+begin
+  inherited Create('Invalid account ID');
+  FErrorCode := LA_E_ACCOUNT_ID;
+end;
+
 constructor ELALoginTemporarilyLockedException.Create;
 begin
   inherited Create('The user account has been temporarily locked for 5 mins due to 5 failed attempts');
@@ -4912,8 +5386,50 @@ end;
 
 constructor ELAUsersLimitReachedException.Create;
 begin
-  inherited Create('The allowed users for this account has reached its limit');
+  inherited Create('The license has reached its allowed users limit');
   FErrorCode := LA_E_USERS_LIMIT_REACHED;
+end;
+
+constructor ELAOSUserException.Create;
+begin
+  inherited Create('OS user has changed since activation and the license is user-locked.');
+  FErrorCode := LA_E_OS_USER;
+end;
+
+constructor ELAInvalidPermissionFlagException.Create;
+begin
+  inherited Create('Invalid permission flag');
+  FErrorCode := LA_E_INVALID_PERMISSION_FLAG;
+end;
+
+constructor ELAFreePlanActivationLimitReachedException.Create;
+begin
+  inherited Create('The free plan has reached it''s activation limit.');
+  FErrorCode := LA_E_FREE_PLAN_ACTIVATION_LIMIT_REACHED;
+end;
+
+constructor ELAFeatureEntitlementsInvalidException.Create;
+begin
+  inherited Create('Invalid feature entitlements');
+  FErrorCode := LA_E_FEATURE_ENTITLEMENTS_INVALID;
+end;
+
+constructor ELAFeatureEntitlementNotFoundException.Create;
+begin
+  inherited Create('The feature entitlement does not exist');
+  FErrorCode := LA_E_FEATURE_ENTITLEMENT_NOT_FOUND;
+end;
+
+constructor ELAEntitlementSetNotLinkedException.Create;
+begin
+  inherited Create('No entitlement set is linked to the license');
+  FErrorCode := LA_E_ENTITLEMENT_SET_NOT_LINKED;
+end;
+
+constructor ELALicenseNotEffectiveException.Create;
+begin
+  inherited Create('The license cannot be activated before its effective date');
+  FErrorCode := LA_E_LICENSE_NOT_EFFECTIVE;
 end;
 
 initialization
