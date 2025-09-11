@@ -100,6 +100,8 @@ function LAKeyStatusToString(Item: TLAKeyStatus): string;
     This function must be called on every start of your program
     before any other functions are called.
 
+    NOTE: This function is deprecated. Use SetProductData() instead.
+
     PARAMETERS:
     * FilePath - absolute path of the product file (Product.dat)
 
@@ -109,7 +111,7 @@ function LAKeyStatusToString(Item: TLAKeyStatus): string;
     other functions will work.
 *)
 
-procedure SetProductFile(const FilePath: UnicodeString);
+procedure SetProductFile(const FilePath: UnicodeString); deprecated 'Use SetProductData instead';
 
 (*
     PROCEDURE: SetProductData()
@@ -313,6 +315,8 @@ procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: Unic
     This function must be called before ActivateLicense() or IsLicenseGenuine()
     function if 'requireAuthentication' property of the license is set to true.
 
+    NOTE: This function is deprecated. Use AuthenticateUser() instead.
+
     PARAMETERS:
     * Email - user email address.
     * Password - user password.
@@ -320,7 +324,7 @@ procedure SetTwoFactorAuthenticationCode(const TwoFactorAuthenticationCode: Unic
     EXCEPTIONS: ELAProductIdException, ELALicenseKeyException
 *)
 
-procedure SetLicenseUserCredential(const Email, Password: UnicodeString);
+procedure SetLicenseUserCredential(const Email, Password: UnicodeString); deprecated 'Use AuthenticateUser instead';
 
 (*
     PROCEDURE: SetLicenseCallback()
@@ -429,13 +433,15 @@ procedure SetTrialActivationMetadata(const Key, Value: UnicodeString);
     The app version appears along with the activation details in dashboard. It
     is also used to generate app analytics.
 
+    This function is deprecated. Use SetReleaseVersion() instead.
+
     PARAMETERS:
     * AppVersion - string of maximum length 256 characters with utf-8 encoding.
 
     EXCEPTIONS: ELAProductIdException, ELAAppVersionLengthException
 *)
 
-procedure SetAppVersion(const AppVersion: UnicodeString);
+procedure SetAppVersion(const AppVersion: UnicodeString); deprecated 'Use SetReleaseVersion instead';
 
 (*
     PROCEDURE: SetOfflineActivationRequestMeterAttributeUses()
@@ -591,7 +597,7 @@ function GetFeatureEntitlement(const FeatureName: UnicodeString): TFeatureEntitl
     ELABufferSizeException
 *)
 
-function GetProductVersionName: UnicodeString;
+function GetProductVersionName: UnicodeString; deprecated 'Use GetLicenseEntitlementSetName instead';
 
 (*
     FUNCTION: GetProductVersionDisplayName()
@@ -607,14 +613,14 @@ function GetProductVersionName: UnicodeString;
     ELABufferSizeException
 *)
 
-function GetProductVersionDisplayName: UnicodeString;
+function GetProductVersionDisplayName: UnicodeString; deprecated 'Use GetLicenseEntitlementSetDisplayName instead';
 
 (*
     FUNCTION: GetProductVersionFeatureFlag()
 
     PURPOSE: Gets the product version feature flag.
 
-    This function is deprecated. Use GetFeatureEntitlement() instead.
+    This function is deprecated. Use GetLicenseEntitlementSetDisplayName instead.
 
     PARAMETERS:
     * Name - name of the feature flag
@@ -627,12 +633,14 @@ function GetProductVersionDisplayName: UnicodeString;
     ELAFeatureFlagNotFoundException, ELABufferSizeException
 *)
 
-function GetProductVersionFeatureFlag(const Name: UnicodeString; out Data: UnicodeString): Boolean;
+function GetProductVersionFeatureFlag(const Name: UnicodeString; out Data: UnicodeString): Boolean; deprecated 'Use GetFeatureEntitlement instead';
 
 (*
     FUNCTION: GetLicenseMetadata()
 
     PURPOSE: Gets the license metadata as set in the dashboard.
+
+    This function is deprecated. Use GetFeatureEntitlement instead.
 
     PARAMETERS:
     * Key - key to retrieve the value
