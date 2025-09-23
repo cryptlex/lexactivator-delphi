@@ -620,7 +620,7 @@ function GetProductVersionDisplayName: UnicodeString; deprecated 'Use GetLicense
 
     PURPOSE: Gets the product version feature flag.
 
-    This function is deprecated. Use GetFeatureEntitlement instead.
+    This function is deprecated. Use GetFeatureEntitlement() instead.
 
     PARAMETERS:
     * Name - name of the feature flag
