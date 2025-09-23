@@ -620,7 +620,7 @@ function GetProductVersionDisplayName: UnicodeString; deprecated 'Use GetLicense
 
     PURPOSE: Gets the product version feature flag.
 
-    This function is deprecated. Use GetLicenseEntitlementSetDisplayName instead.
+    This function is deprecated. Use GetFeatureEntitlement instead.
 
     PARAMETERS:
     * Name - name of the feature flag
@@ -639,8 +639,6 @@ function GetProductVersionFeatureFlag(const Name: UnicodeString; out Data: Unico
     FUNCTION: GetLicenseMetadata()
 
     PURPOSE: Gets the license metadata as set in the dashboard.
-
-    This function is deprecated. Use GetFeatureEntitlement instead.
 
     PARAMETERS:
     * Key - key to retrieve the value
