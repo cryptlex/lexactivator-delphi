@@ -73,6 +73,8 @@ type
     &Type: string;
     AllowedActivations: Int64;
     AllowedDeactivations: Int64;
+    TotalActivations: UInt32;
+    TotalDeactivations: UInt32;
     Metadata: TArray<TMetadata>;
 end;
 
@@ -87,6 +89,7 @@ type
     FeatureName: UnicodeString;
     FeatureDisplayName: UnicodeString;
     Value: UnicodeString;
+    ExpiresAt: Int64;
   end;
 
 function LAFlagsToString(Item: TLAFlags): string;
@@ -545,7 +548,7 @@ function GetLicenseEntitlementSetName: UnicodeString;
 function GetLicenseEntitlementSetDisplayName: UnicodeString;
 
 (*
-    FUNCTION: GetLicenseEntitlements()
+    FUNCTION: GetFeatureEntitlements()
 
     PURPOSE: Gets the feature entitlements associated with the license.
 
@@ -563,7 +566,7 @@ function GetLicenseEntitlementSetDisplayName: UnicodeString;
 function GetFeatureEntitlements: TArray<TFeatureEntitlement>;
 
 (*
-    FUNCTION: GetLicenseEntitlement()
+    FUNCTION: GetFeatureEntitlement()
 
     PURPOSE: Gets the feature entitlement associated with the license.
 
@@ -3605,6 +3608,16 @@ var
       Result := JSONValue.Value;
   end;
 
+  function GetJSONInt64Value(const JSONObject: TJSONObject; const FieldName: string): Int64;
+  var
+    JSONValue: TJSONValue;
+  begin
+    Result := 0;
+    JSONValue := JSONObject.GetValue(FieldName);
+    if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
+      Exit;
+  end;
+
   function Try256(var OuterResult: UnicodeString): Boolean;
   var
     Buffer: array[0 .. 255] of WideChar;
@@ -3643,6 +3656,7 @@ begin
     FeatureEntitlement.FeatureName := GetJSONStrValue(JSONObject, 'featureName');
     FeatureEntitlement.FeatureDisplayName := GetJSONStrValue(JSONObject, 'featureDisplayName');
     FeatureEntitlement.Value := GetJSONStrValue(JSONObject, 'value');
+    FeatureEntitlement.ExpiresAt := GetJSONInt64Value(JSONObject, 'expiresAt');
   finally
     JSONObject.Free;
   end;
@@ -3670,6 +3684,16 @@ var
     JSONValue := JSONObject.GetValue(FieldName);
     if JSONValue <> nil then
       Result := JSONValue.Value;
+  end;
+
+  function GetJSONInt64Value(const JSONObject: TJSONObject; const FieldName: string): Int64;
+  var
+    JSONValue: TJSONValue;
+  begin
+    Result := 0;
+    JSONValue := JSONObject.GetValue(FieldName);
+    if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
+      Exit;
   end;
 
   function Try256(var OuterResult: UnicodeString): Boolean;
@@ -3719,6 +3743,7 @@ begin
         FeatureEntitlement.FeatureName := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'featureName');
         FeatureEntitlement.FeatureDisplayName := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'featureDisplayName');
         FeatureEntitlement.Value := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'value');
+        FeatureEntitlement.ExpiresAt := GetJSONInt64Value(JSONArray.Items[I] as TJSONObject, 'expiresAt');
         Result[I] := FeatureEntitlement;
       end;
     end;
@@ -4148,6 +4173,17 @@ var
     if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
       Exit;
   end;
+
+  function GetJSONUInt32Value(const JSONObject: TJSONObject; const FieldName: string): UInt32;
+  var
+    JSONValue: TJSONValue;
+  begin
+    Result := 0;
+    JSONValue := JSONObject.GetValue(FieldName);
+    if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
+      Exit;
+  end;
+
   function Try256(var OuterResult: UnicodeString): Boolean;
   var
     Buffer: array[0..255] of WideChar;
@@ -4195,9 +4231,11 @@ begin
       LicenseItem := Default(TUserLicense);
       
       LicenseItem.Key := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'key');
-      LicenseItem.&Type := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'key');
+      LicenseItem.&Type := GetJSONStrValue(JSONArray.Items[I] as TJSONObject, 'type');
       LicenseItem.AllowedActivations := GetJSONInt64Value(JSONArray.Items[I] as TJSONObject, 'allowedActivations');
       LicenseItem.AllowedDeactivations := GetJSONInt64Value(JSONArray.Items[I] as TJSONObject, 'allowedDeactivations');
+      LicenseItem.TotalActivations := GetJSONUInt32Value(JSONArray.Items[I] as TJSONObject, 'totalActivations');
+      LicenseItem.TotalDeactivations := GetJSONUInt32Value(JSONArray.Items[I] as TJSONObject, 'totalDeactivations');
       MetadataArray := (JSONArray.Items[I] as TJSONObject).GetValue('metadata') as TJSONArray;
       if MetadataArray <> nil then
       begin
