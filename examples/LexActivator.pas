@@ -997,6 +997,18 @@ function GetActivationMeterAttributeUses(const Name: UnicodeString): LongWord;
 function GetServerSyncGracePeriodExpiryDate: TDateTime;
 
 (*
+    FUNCTION: GetLastActivationError()
+
+    PURPOSE: Gets the error code that caused the activation data to be cleared.
+
+    RESULT: Error code that caused activation data deletion.
+
+    EXCEPTIONS: ELAProductIdException
+*)
+
+function GetLastActivationError: UInt32;
+
+(*
     FUNCTION: GetTrialActivationMetadata()
 
     PURPOSE: Gets the trial activation metadata.
@@ -4476,6 +4488,18 @@ begin
     raise
     ELAFailException.Create('Failed to get the server sync grace period expiry date timestamp');
   Result := UnixToDateTime(ExpiryDate);
+end;
+
+function Thin_GetLastActivationError(out errorCode: UInt32): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLastActivationError';
+
+function GetLastActivationError: UInt32;
+var
+  ErrorCode: UInt32;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLastActivationError(Result)) then
+    raise
+    ELAFailException.Create('Failed to get the error code');
 end;
 
 function Thin_GetTrialActivationMetadata(const key: PWideChar; out value; length: LongWord): TLAStatusCode; cdecl;
