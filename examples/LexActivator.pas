@@ -1473,7 +1473,7 @@ procedure ResetActivationMeterAttributeUses(const Name: UnicodeString);
     set it first using SetDataDirectory().
 
     PARAMETERS:
-    * oldPermissionFlag - permission flag used previously
+    * OldPermissionFlag - permission flag used previously
 
     RETURN CODES: LA_OK, LA_E_FILE_PERMISSION, LA_E_PRODUCT_DATA,
     LA_E_INVALID_PERMISSION_FLAG, LA_E_SYSTEM_PERMISSION, LA_FAIL
@@ -1481,7 +1481,7 @@ procedure ResetActivationMeterAttributeUses(const Name: UnicodeString);
     NOTE: The function does not support migration from custom data directories.
 *)
 
-procedure MigrateToSystemWideActivation(Flags: TLAFlags);
+procedure MigrateToSystemWideActivation(OldPermissionFlag: TLAFlags);
 
 (*
     PROCEDURE: LAReset()
@@ -4942,9 +4942,9 @@ end;
 function Thin_MigrateToSystemWideActivation(flags: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'MigrateToSystemWideActivation';
 
-procedure MigrateToSystemWideActivation(Flags: TLAFlags);
+procedure MigrateToSystemWideActivation(OldPermissionFlag: TLAFlags);
 begin
-  if not ELAError.CheckOKFail(Thin_MigrateToSystemWideActivation(LAFlagsToLongWord[Flags])) then
+  if not ELAError.CheckOKFail(Thin_MigrateToSystemWideActivation(LAFlagsToLongWord[OldPermissionFlag])) then
     raise
     ELAFailException.Create('Migration to syswide storage failed');
 end;
