@@ -1,16 +1,16 @@
-This product includes software developed by third parties.
-Not all Cryptlex products necessarily include all third-party components listed below.
+lexactivator-delphi uses third-party libraries or other resources that may be
+distributed under licenses different than the lexactivator-delphi.
 
-The following third-party software is provided by permission of the respective licensors
-and/or copyright holders under the terms of their licenses. These terms apply only
-to the third-party software identified below and not to Cryptlex software.
+In the event that we accidentally failed to list a required notice, please
+bring it to our attention. Post an issue or email us:
 
-======================================================================
+           support@cryptlex.com
 
-cURL, Copyright (c) 1996 - 2026, Daniel Stenberg, daniel@haxx.se, and many contributors, see the THANKS file. 
+The attached notices are provided for information only.
 
-License Text:
-
+License notice for:
+cURL, Copyright (c) 1996 - 2026, Daniel Stenberg, daniel@haxx.se, and many contributors, see the THANKS file.
+-------------------------------------------------
 COPYRIGHT AND PERMISSION NOTICE
 
 Copyright (c) 1996 - 2026, Daniel Stenberg, daniel@haxx.se, and many contributors, see the THANKS file.
@@ -23,12 +23,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 Except as contained in this notice, the name of a copyright holder shall not be used in advertising or otherwise to promote the sale, use or other dealings in this Software without prior written authorization of the copyright holder.
 
-======================================================================
-
+License notice for:
 mbedTLS, Copyright The Mbed TLS Contributors
-
-License Text:
-
+-------------------------------------------------
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -206,12 +203,9 @@ License Text:
 
    END OF TERMS AND CONDITIONS
 
-======================================================================
-
+License notice for:
 Botan, Copyright (C) 1999-2026 The Botan Authors
-
-License Text:
-
+-------------------------------------------------
 Copyright (C) 1999-2026 The Botan Authors
 All rights reserved.
 
@@ -237,14 +231,10 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 
-======================================================================
-
+License notice for:
 ArduinoJson, Copyright © 2014-2025, Benoit BLANCHON
-
-License Text:
-
+-------------------------------------------------
 The MIT License (MIT)
----------------------
 
 Copyright © 2014-2025, Benoit BLANCHON
 
@@ -253,5 +243,3 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-======================================================================
