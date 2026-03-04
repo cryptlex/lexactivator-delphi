@@ -548,6 +548,19 @@ function GetLicenseEntitlementSetName: UnicodeString;
 function GetLicenseEntitlementSetDisplayName: UnicodeString;
 
 (*
+    FUNCTION: GetLicenseEntitlementSetTier()
+
+    PURPOSE: Gets the license entitlement set tier.
+
+    RESULT: License entitlement set tier.
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException, ELAEntitlementSetNotLinkedException
+*)
+
+function GetLicenseEntitlementSetTier: Int64;
+
+(*
     FUNCTION: GetFeatureEntitlements()
 
     PURPOSE: Gets the feature entitlements associated with the license.
@@ -3598,6 +3611,16 @@ begin
   if not Try256(Result) then TryHigh(Result);
   if not ELAError.CheckOKFail(ErrorCode) then
     raise ELAFailException.Create('Failed to get the license entitlement set display name');
+end;
+
+function Thin_GetLicenseEntitlementSetTier(out tier: Int64): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetLicenseEntitlementSetTier';
+
+function GetLicenseEntitlementSetTier: Int64;
+begin
+  if not ELAError.CheckOKFail(Thin_GetLicenseEntitlementSetTier(Result)) then
+    raise
+    ELAFailException.Create('Failed to get the license entitlement set tier');
 end;
 
 function Thin_GetFeatureEntitlement(const featureName: PWideChar; out featureEntitlement; length: LongWord): TLAStatusCode; cdecl;
