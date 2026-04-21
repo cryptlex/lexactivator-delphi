@@ -35,7 +35,11 @@ uses
   DateUtils, Math,
   LexActivator.DelphiFeatures; // only because of TClass_UnitName
 
-{$R *.dfm}
+{$IFDEF FPC}
+  {$R *.lfm}
+{$ELSE}
+  {$R *.dfm}
+{$ENDIF}
 
 function ScopedClassName(Item: TClass): string;
 var

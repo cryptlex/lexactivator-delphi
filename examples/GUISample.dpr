@@ -1,6 +1,9 @@
 program GUISample;
 
 uses
+{$IFDEF FPC}
+  Interfaces,
+{$ENDIF}
   Forms,
   GUISample.MainForm in 'GUISample.MainForm.pas' {GUISampleForm};
 

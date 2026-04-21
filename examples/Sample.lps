@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectSession>
+    <PathDelim Value="\"/>
+    <Version Value="12"/>
+    <BuildModes Active="Default"/>
+    <Units>
+      <Unit>
+        <Filename Value="Sample.dpr"/>
+        <IsPartOfProject Value="True"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="42"/>
+        <CursorPos X="5" Y="54"/>
+        <UsageCount Value="25"/>
+        <Loaded Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="LexActivator.pas"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="5117"/>
+        <CursorPos Y="5132"/>
+        <UsageCount Value="12"/>
+        <Loaded Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="LexActivator.DelphiFeatures.pas"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="82"/>
+        <CursorPos X="22" Y="100"/>
+        <UsageCount Value="11"/>
+        <Loaded Value="True"/>
+      </Unit>
+    </Units>
+    <JumpHistory HistoryIndex="26">
+      <Position>
+        <Filename Value="Sample.dpr"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="5" Column="5"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="7" Column="5"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="5" Column="5"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="7" Column="9"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="18" Column="9"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="213" Column="5" TopLine="191"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="26"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="19" Column="9"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="20" Column="3"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="14" Column="50"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.DelphiFeatures.pas"/>
+        <Caret Line="100" Column="22" TopLine="82"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="14" Column="50"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="55" Column="3" TopLine="44"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.DelphiFeatures.pas"/>
+        <Caret Line="100" Column="22" TopLine="82"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="98" Column="21" TopLine="87"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="14" Column="50"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="388" Column="24" TopLine="377"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="3217" Column="63" TopLine="3206"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="3180" Column="11" TopLine="3169"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="3721" Column="26" TopLine="3710"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="3726" Column="27" TopLine="3726"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="4797" Column="10" TopLine="4787"/>
+      </Position>
+      <Position>
+        <Filename Value="LexActivator.pas"/>
+        <Caret Line="3227" Column="11" TopLine="3216"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="14" Column="50" TopLine="24"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="223" Column="7" TopLine="46"/>
+      </Position>
+      <Position>
+        <Filename Value="Sample.dpr"/>
+        <Caret Line="121" Column="27" TopLine="110"/>
+      </Position>
+    </JumpHistory>
+    <RunParams>
+      <FormatVersion Value="2"/>
+      <Modes ActiveMode=""/>
+    </RunParams>
+  </ProjectSession>
+</CONFIG>

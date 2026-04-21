@@ -1,9 +1,20 @@
-{$WARN UNSAFE_TYPE OFF} // Pointer
+{$IFNDEF FPC}
+  {$WARN UNSAFE_TYPE OFF} // Pointer
+{$ENDIF}
 
 unit LexActivator.DelphiFeatures;
 
 interface
 
+{$IFDEF FPC}
+  {$DEFINE DELPHI_HAS_UINT64}
+  {$DEFINE DELPHI_HAS_INLINE}
+  {$DEFINE DELPHI_CLASS_CAN_BE_ABSTRACT}
+  {$DEFINE DELPHI_HAS_RECORDS}
+  {$DEFINE DELPHI_IS_UNICODE}
+  {$DEFINE DELPHI_HAS_RTTI}
+  {$DEFINE DELPHI_HAS_INTPTR}
+{$ELSE}
 {$IF CompilerVersion >= 16.0}
   {$DEFINE DELPHI_HAS_UINT64}
 {$IFEND}
@@ -30,6 +41,7 @@ interface
   {$DEFINE DELPHI_HAS_INTPTR}
   {$DEFINE DELPHI_UNITS_SCOPED}
 {$IFEND}
+{$ENDIF}
 
 {$IFNDEF DELPHI_IS_UNICODE}
 type
@@ -77,6 +89,15 @@ begin
   Result := Item.UnitName;
 end;
 {$ELSE}
+{$IFDEF FPC}
+begin
+  // FPC TypInfo layout differs from Delphi; return stable fallback.
+  if Assigned(Item) then
+    Result := Item.ClassName
+  else
+    Result := '';
+end;
+{$ELSE}
 var
   ClassInfo: Pointer;
   TypeData: PTypeData;
@@ -89,6 +110,7 @@ begin
   if not Assigned(TypeData) then Exit;
   Result := TypeData.UnitName;
 end;
+{$ENDIF}
 {$ENDIF}
 
 end.

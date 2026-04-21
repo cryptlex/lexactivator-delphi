@@ -1,9 +1,20 @@
-{$WARN UNSAFE_TYPE OFF} // PAnsiChar, PWideChar, untyped
+{$IFNDEF FPC}
+  {$WARN UNSAFE_TYPE OFF} // PAnsiChar, PWideChar, untyped
+{$ENDIF}
 
 unit LexActivator;
 
 interface
 
+{$IFDEF FPC}
+  {$DEFINE DELPHI_HAS_UINT64}
+  {$DEFINE DELPHI_HAS_INLINE}
+  {$DEFINE DELPHI_CLASS_CAN_BE_ABSTRACT}
+  {$DEFINE DELPHI_HAS_RECORDS}
+  {$DEFINE DELPHI_IS_UNICODE}
+  {$DEFINE DELPHI_HAS_RTTI}
+  {$DEFINE DELPHI_HAS_INTPTR}
+{$ELSE}
 {$IF CompilerVersion >= 16.0}
   {$DEFINE DELPHI_HAS_UINT64}
 {$IFEND}
@@ -30,6 +41,7 @@ interface
   {$DEFINE DELPHI_HAS_INTPTR}
   {$DEFINE DELPHI_UNITS_SCOPED}
 {$IFEND}
+{$ENDIF}
 
 uses
   LexActivator.DelphiFeatures,
@@ -38,9 +50,16 @@ uses
   System.JSON,
   System.Generics.Collections
 {$ELSE}
+{$IFDEF FPC}
+  SysUtils,
+  fpjson,
+  jsonparser,
+  Generics.Collections
+{$ELSE}
   SysUtils,
   JSON,
   Generics.Collections
+{$ENDIF}
 {$ENDIF}
   ;
 
@@ -68,6 +87,9 @@ type
 end;
 
 type
+  TMetadataArray = array of TMetadata;
+
+type
   TUserLicense = record
     Key: string;
     &Type: string;
@@ -75,8 +97,11 @@ type
     AllowedDeactivations: Int64;
     TotalActivations: UInt32;
     TotalDeactivations: UInt32;
-    Metadata: TArray<TMetadata>;
+    Metadata: TMetadataArray;
 end;
+
+type
+  TUserLicenseArray = array of TUserLicense;
 
 type
   TActivationMode = record
@@ -91,6 +116,9 @@ type
     Value: UnicodeString;
     ExpiresAt: Int64;
   end;
+
+type
+  TFeatureEntitlementArray = array of TFeatureEntitlement;
 
 function LAFlagsToString(Item: TLAFlags): string;
 function LAKeyStatusToString(Item: TLAKeyStatus): string;
@@ -563,7 +591,7 @@ function GetLicenseEntitlementSetDisplayName: UnicodeString;
     ELAFeatureEntitlementsInvalidException
 *)
 
-function GetFeatureEntitlements: TArray<TFeatureEntitlement>;
+function GetFeatureEntitlements: TFeatureEntitlementArray;
 
 (*
     FUNCTION: GetFeatureEntitlement()
@@ -855,7 +883,7 @@ function GetLicenseOrganizationAddress: TOrganizationAddress;
     ELARateLimitException, ELAUserNotAuthenticatedException, ELABufferSizeException
 *)
 
-function GetUserLicenses: TArray<TUserLicense>;
+function GetUserLicenses: TUserLicenseArray;
 
 (*
     FUNCTION: GetActivationLastSyncedDate()
@@ -3186,7 +3214,11 @@ begin
     // that moment. For most sane use cases behavior should be sound
     // anyway.
 
+    {$IFDEF FPC}
+    TLAThin_CallbackProxyClass.Invoke;
+    {$ELSE}
     TThread.Synchronize(nil, TLAThin_CallbackProxyClass.Invoke);
+    {$ENDIF}
   except
     // there should be default logging here like NSLog, but there is none in Delphi
   end;
@@ -3229,7 +3261,11 @@ begin
     // that moment. For most sane use cases behavior should be sound
     // anyway.
 
+    {$IFDEF FPC}
+    TLAThin_CallbackProxyClass.Invoke;
+    {$ELSE}
     TThread.Synchronize(nil, TLAThin_CallbackProxyClass.Invoke);
+    {$ENDIF}
   except
     // there should be default logging here like NSLog, but there is none in Delphi
   end;
@@ -3245,7 +3281,7 @@ begin
     LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
     LALicenseCallbackKind[LocalProxyIndex] := lckProcedure;
 
-    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
+    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(@LAThin_CallbackProxy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
@@ -3263,7 +3299,7 @@ begin
     LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
     LALicenseCallbackKind[LocalProxyIndex] := lckMethod;
 
-    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
+    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(@LAThin_CallbackProxy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
@@ -3282,7 +3318,7 @@ begin
     LALicenseCallbackSynchronized[LocalProxyIndex] := Synchronized;
     LALicenseCallbackKind[LocalProxyIndex] := lckClosure;
 
-    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackProxy)) then
+    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(@LAThin_CallbackProxy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
@@ -3304,7 +3340,7 @@ begin
   try
     LALicenseCallbackKind[LocalProxyIndex] := lckNone;
 
-    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(LAThin_CallbackDummy)) then
+    if not ELAError.CheckOKFail(Thin_SetLicenseCallback(@LAThin_CallbackDummy)) then
       raise
       ELAFailException.Create('Failed to set server sync callback');
   finally
@@ -3600,6 +3636,90 @@ begin
     raise ELAFailException.Create('Failed to get the license entitlement set display name');
 end;
 
+{$IFDEF FPC}
+type
+  TLAJSONValue = TJSONData;
+{$ELSE}
+type
+  TLAJSONValue = TJSONValue;
+{$ENDIF}
+
+function LAParseJSONObject(const S: UnicodeString): TJSONObject;
+var
+  Parsed: TLAJSONValue;
+begin
+  Result := nil;
+  {$IFDEF FPC}
+  Parsed := GetJSON(UTF8Encode(S));
+  {$ELSE}
+  Parsed := TJSONObject.ParseJSONValue(S);
+  {$ENDIF}
+  if Parsed is TJSONObject then
+    Result := TJSONObject(Parsed)
+  else if Assigned(Parsed) then
+    Parsed.Free;
+end;
+
+function LAParseJSONArray(const S: UnicodeString): TJSONArray;
+var
+  Parsed: TLAJSONValue;
+begin
+  Result := nil;
+  {$IFDEF FPC}
+  Parsed := GetJSON(UTF8Encode(S));
+  {$ELSE}
+  Parsed := TJSONObject.ParseJSONValue(S);
+  {$ENDIF}
+  if Parsed is TJSONArray then
+    Result := TJSONArray(Parsed)
+  else if Assigned(Parsed) then
+    Parsed.Free;
+end;
+
+function LAJSONObjectGetValue(const JSONObject: TJSONObject; const FieldName: string): TLAJSONValue;
+begin
+  Result := nil;
+  if not Assigned(JSONObject) then Exit;
+  {$IFDEF FPC}
+  Result := JSONObject.Find(FieldName);
+  {$ELSE}
+  Result := JSONObject.GetValue(FieldName);
+  {$ENDIF}
+end;
+
+function LAJSONValueToString(const JSONValue: TLAJSONValue): string;
+begin
+  Result := '';
+  if not Assigned(JSONValue) then Exit;
+  {$IFDEF FPC}
+  Result := JSONValue.AsString;
+  {$ELSE}
+  Result := JSONValue.Value;
+  {$ENDIF}
+end;
+
+function LAJSONValueToInt64(const JSONValue: TLAJSONValue): Int64;
+begin
+  Result := 0;
+  if not Assigned(JSONValue) then Exit;
+  {$IFDEF FPC}
+  Result := StrToInt64Def(JSONValue.AsString, 0);
+  {$ELSE}
+  JSONValue.TryGetValue(Result);
+  {$ENDIF}
+end;
+
+function LAJSONValueToUInt32(const JSONValue: TLAJSONValue): UInt32;
+begin
+  Result := 0;
+  if not Assigned(JSONValue) then Exit;
+  {$IFDEF FPC}
+  Result := UInt32(StrToInt64Def(JSONValue.AsString, 0));
+  {$ELSE}
+  JSONValue.TryGetValue(Result);
+  {$ENDIF}
+end;
+
 function Thin_GetFeatureEntitlement(const featureName: PWideChar; out featureEntitlement; length: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetFeatureEntitlementInternal';
 
@@ -3612,22 +3732,18 @@ var
 
   function GetJSONStrValue(const JSONObject: TJSONObject; const FieldName: string): string;
   var
-    JSONValue: TJSONValue;
+    JSONValue: TLAJSONValue;
   begin
-    Result := '';
-    JSONValue := JSONObject.GetValue(FieldName);
-    if JSONValue <> nil then
-      Result := JSONValue.Value;
+    JSONValue := LAJSONObjectGetValue(JSONObject, FieldName);
+    Result := LAJSONValueToString(JSONValue);
   end;
 
   function GetJSONInt64Value(const JSONObject: TJSONObject; const FieldName: string): Int64;
   var
-    JSONValue: TJSONValue;
+    JSONValue: TLAJSONValue;
   begin
-    Result := 0;
-    JSONValue := JSONObject.GetValue(FieldName);
-    if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
-      Exit;
+    JSONValue := LAJSONObjectGetValue(JSONObject, FieldName);
+    Result := LAJSONValueToInt64(JSONValue);
   end;
 
   function Try256(var OuterResult: UnicodeString): Boolean;
@@ -3662,7 +3778,7 @@ begin
   if not ELAError.CheckOKFail(ErrorCode) then
     raise ELAFailException.Create('Failed to get feature entitlement');
 
-  JSONObject := TJSONObject.ParseJSONValue(JSONString) as TJSONObject;
+  JSONObject := LAParseJSONObject(JSONString);
 
   try
     FeatureEntitlement.FeatureName := GetJSONStrValue(JSONObject, 'featureName');
@@ -3680,7 +3796,7 @@ end;
 function Thin_GetFeatureEntitlements(out featureEntitlements; length: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetFeatureEntitlementsInternal';
 
-function GetFeatureEntitlements: TArray<TFeatureEntitlement>;
+function GetFeatureEntitlements: TFeatureEntitlementArray;
 var
   ErrorCode: TLAStatusCode;
   JSONString: UnicodeString;
@@ -3690,22 +3806,18 @@ var
 
   function GetJSONStrValue(const JSONObject: TJSONObject; const FieldName: string): string;
   var
-    JSONValue: TJSONValue;
+    JSONValue: TLAJSONValue;
   begin
-    Result := '';
-    JSONValue := JSONObject.GetValue(FieldName);
-    if JSONValue <> nil then
-      Result := JSONValue.Value;
+    JSONValue := LAJSONObjectGetValue(JSONObject, FieldName);
+    Result := LAJSONValueToString(JSONValue);
   end;
 
   function GetJSONInt64Value(const JSONObject: TJSONObject; const FieldName: string): Int64;
   var
-    JSONValue: TJSONValue;
+    JSONValue: TLAJSONValue;
   begin
-    Result := 0;
-    JSONValue := JSONObject.GetValue(FieldName);
-    if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
-      Exit;
+    JSONValue := LAJSONObjectGetValue(JSONObject, FieldName);
+    Result := LAJSONValueToInt64(JSONValue);
   end;
 
   function Try256(var OuterResult: UnicodeString): Boolean;
@@ -3744,7 +3856,7 @@ begin
   if JSONString = '' then
     Exit;
 
-  JSONArray := TJSONObject.ParseJSONValue(JSONString) as TJSONArray;
+  JSONArray := LAParseJSONArray(JSONString);
   try
     if JSONArray <> nil then
     begin
@@ -4129,15 +4241,15 @@ begin
   if JSONString <> '' then
   begin
     try
-      JSONObject := TJSONObject.ParseJSONValue(JSONString) as TJSONObject;
+      JSONObject := LAParseJSONObject(JSONString);
       if JSONObject <> nil then
       try
-        JSONObject.TryGetValue('AddressLine1', Result.AddressLine1);
-        JSONObject.TryGetValue('AddressLine2', Result.AddressLine2);
-        JSONObject.TryGetValue('City', Result.City);
-        JSONObject.TryGetValue('State', Result.State);
-        JSONObject.TryGetValue('Country', Result.Country);
-        JSONObject.TryGetValue('PostCode', Result.PostCode);
+        Result.AddressLine1 := LAJSONValueToString(LAJSONObjectGetValue(JSONObject, 'AddressLine1'));
+        Result.AddressLine2 := LAJSONValueToString(LAJSONObjectGetValue(JSONObject, 'AddressLine2'));
+        Result.City := LAJSONValueToString(LAJSONObjectGetValue(JSONObject, 'City'));
+        Result.State := LAJSONValueToString(LAJSONObjectGetValue(JSONObject, 'State'));
+        Result.Country := LAJSONValueToString(LAJSONObjectGetValue(JSONObject, 'Country'));
+        Result.PostCode := LAJSONValueToString(LAJSONObjectGetValue(JSONObject, 'PostCode'));
       finally
         JSONObject.Free;
       end
@@ -4155,7 +4267,7 @@ end;
 function Thin_GetUserLicenses(out userLicenses; length: LongWord): TLAStatusCode; cdecl;
   external LexActivator_DLL name 'GetUserLicensesInternal';
 
-function GetUserLicenses: TArray<TUserLicense>;
+function GetUserLicenses: TUserLicenseArray;
 var
   ErrorCode: TLAStatusCode;
   JSONString: UnicodeString;
@@ -4168,32 +4280,26 @@ var
 
   function GetJSONStrValue(const JSONObject: TJSONObject; const FieldName: string): string;
   var
-    JSONValue: TJSONValue;
+    JSONValue: TLAJSONValue;
   begin
-    Result := '';
-    JSONValue := JSONObject.GetValue(FieldName);
-    if JSONValue <> nil then
-      Result := JSONValue.Value;
+    JSONValue := LAJSONObjectGetValue(JSONObject, FieldName);
+    Result := LAJSONValueToString(JSONValue);
   end;
 
   function GetJSONInt64Value(const JSONObject: TJSONObject; const FieldName: string): Int64;
   var
-    JSONValue: TJSONValue;
+    JSONValue: TLAJSONValue;
   begin
-    Result := 0;
-    JSONValue := JSONObject.GetValue(FieldName);
-    if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
-      Exit;
+    JSONValue := LAJSONObjectGetValue(JSONObject, FieldName);
+    Result := LAJSONValueToInt64(JSONValue);
   end;
 
   function GetJSONUInt32Value(const JSONObject: TJSONObject; const FieldName: string): UInt32;
   var
-    JSONValue: TJSONValue;
+    JSONValue: TLAJSONValue;
   begin
-    Result := 0;
-    JSONValue := JSONObject.GetValue(FieldName);
-    if (JSONValue <> nil) and JSONValue.TryGetValue(Result) then
-      Exit;
+    JSONValue := LAJSONObjectGetValue(JSONObject, FieldName);
+    Result := LAJSONValueToUInt32(JSONValue);
   end;
 
   function Try256(var OuterResult: UnicodeString): Boolean;
@@ -4232,7 +4338,7 @@ begin
   if ErrorCode <> LA_OK then
     raise Exception.Create('Failed to get user licenses. Error code: ' + IntToStr(ErrorCode));
 
-  JSONArray := TJSONObject.ParseJSONValue(JSONString) as TJSONArray;
+  JSONArray := LAParseJSONArray(JSONString);
   if JSONArray = nil then
     raise Exception.Create('Error while parsing JSON: Invalid JSON data or empty JSON array');
 
@@ -4248,7 +4354,7 @@ begin
       LicenseItem.AllowedDeactivations := GetJSONInt64Value(JSONArray.Items[I] as TJSONObject, 'allowedDeactivations');
       LicenseItem.TotalActivations := GetJSONUInt32Value(JSONArray.Items[I] as TJSONObject, 'totalActivations');
       LicenseItem.TotalDeactivations := GetJSONUInt32Value(JSONArray.Items[I] as TJSONObject, 'totalDeactivations');
-      MetadataArray := (JSONArray.Items[I] as TJSONObject).GetValue('metadata') as TJSONArray;
+      MetadataArray := LAJSONObjectGetValue(JSONArray.Items[I] as TJSONObject, 'metadata') as TJSONArray;
       if MetadataArray <> nil then
       begin
         SetLength(LicenseItem.Metadata, MetadataArray.Count);
@@ -4688,7 +4794,7 @@ begin
 
     if not ELAError.CheckOKFail(Thin_CheckForReleaseUpdate
         (PWideChar(APlatform), PWideChar(Version), PWideChar(Channel),
-         LAThin_CallbackProxy2)) then
+         @LAThin_CallbackProxy2)) then
       raise
       ELAFailException.Create('Failed to set release update check callback');
   finally
@@ -4709,7 +4815,7 @@ begin
 
     if not ELAError.CheckOKFail(Thin_CheckForReleaseUpdate
         (PWideChar(APlatform), PWideChar(Version), PWideChar(Channel),
-         LAThin_CallbackProxy2)) then
+         @LAThin_CallbackProxy2)) then
       raise
       ELAFailException.Create('Failed to set release update check callback');
   finally

@@ -1,0 +1,71 @@
+object GUISampleForm: TGUISampleForm
+  Left = 400
+  Height = 240
+  Top = 220
+  Width = 520
+  Caption = 'LexActivator GUI Sample'
+  ClientHeight = 240
+  ClientWidth = 520
+  OnDestroy = FormDestroy
+  OnShow = FormShow
+  LCLVersion = '2.2.0.4'
+  object lblProductKey: TLabel
+    Left = 16
+    Height = 15
+    Top = 16
+    Width = 68
+    Caption = 'License Key:'
+    ParentColor = False
+  end
+  object edtLicenseKey: TEdit
+    Left = 16
+    Height = 23
+    Top = 36
+    Width = 480
+    TabOrder = 0
+  end
+  object lblExtraData: TLabel
+    Left = 16
+    Height = 15
+    Top = 72
+    Width = 92
+    Caption = 'Extra metadata:'
+    ParentColor = False
+  end
+  object edtExtraData: TEdit
+    Left = 16
+    Height = 23
+    Top = 92
+    Width = 480
+    TabOrder = 1
+  end
+  object btnActivateTrial: TButton
+    Left = 16
+    Height = 30
+    Top = 132
+    Width = 140
+    Caption = 'Activate Trial'
+    OnClick = btnActivateTrialClick
+    TabOrder = 2
+  end
+  object btnActivate: TButton
+    Left = 172
+    Height = 30
+    Top = 132
+    Width = 140
+    Caption = 'Activate'
+    OnClick = btnActivateClick
+    TabOrder = 3
+  end
+  object statStatusBar: TStatusBar
+    Left = 0
+    Height = 24
+    Top = 216
+    Width = 520
+    Panels = <
+      item
+        Width = 500
+      end>
+    SimplePanel = False
+  end
+end
