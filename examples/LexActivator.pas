@@ -1294,6 +1294,33 @@ function IsLicenseGenuine: TLAKeyStatus;
 function IsLicenseValid: TLAKeyStatus;
 
 (*
+    FUNCTION: SyncLicenseActivation()
+
+    PURPOSE: Synchronizes the activation data with the Cryptlex servers.
+
+    The license must already be activated when this function is called.
+
+    This is a blocking call that performs a one-time synchronization to refresh the local
+    license data.
+
+    In most cases, rely on IsLicenseGenuine(), which automatically handles periodic background
+    synchronization based on the configured interval.
+
+    NOTE: Do not use this function in regular application flow. Use it only when an immediate
+    synchronization is required.
+
+    RETURN CODES: lkOK, lkExpired, lkSuspended, lkFail
+
+    EXCEPTIONS: ELAProductIdException, ELAInetException,
+    ELAVMException, ELATimeException, ELAActivationLimitException,
+    ELAServerException, ELAClientException, ELAAuthenticationFailedException,
+    ELALicenseTypeException, ELACountryException, ELAIPException,
+    ELARateLimitException, ELALicenseKeyException
+*)
+
+function SyncLicenseActivation: TLAKeyStatus;
+
+(*
     FUNCTION: ActivateTrial()
 
     PURPOSE: Starts the verified trial in your application by contacting the
@@ -1310,6 +1337,31 @@ function IsLicenseValid: TLAKeyStatus;
 *)
 
 function ActivateTrial: TLAKeyStatus;
+
+(*
+    FUNCTION: SyncTrialActivation()
+
+    PURPOSE: Synchronizes the trial activation data with the Cryptlex servers.
+
+    The trial must already be activated when this function is called.
+
+    This is a blocking call that performs a one-time synchronization to refresh the local trial
+    data.
+
+    Unlike IsTrialGenuine(), which validates the trial activation data locally, this function
+    performs an immediate synchronization with the servers.
+
+    NOTE: Use this function to immediately reflect server-side changes on the user's machine,
+    such as trial extensions.
+
+    RETURN CODES: lkOK, lkTrialExpired, lkFail
+
+    EXCEPTIONS: ELAProductIdException, ELAInetException,
+    ELAVMException, ELATimeException, ELAServerException, ELAClientException,
+    ELACountryException, ELAIPException, ELARateLimitException
+*)
+
+function SyncTrialActivation: TLAKeyStatus;
 
 (*
     FUNCTION: ActivateTrialOffline()
@@ -4874,12 +4926,28 @@ begin
   Result := ELAError.CheckKeyStatus(Thin_IsLicenseValid);
 end;
 
+function Thin_SyncLicenseActivation: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SyncLicenseActivation';
+
+function SyncLicenseActivation: TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_SyncLicenseActivation);
+end;
+
 function Thin_ActivateTrial: TLAStatusCode; cdecl;
   external LexActivator_DLL name 'ActivateTrial';
 
 function ActivateTrial: TLAKeyStatus;
 begin
   Result := ELAError.CheckKeyStatus(Thin_ActivateTrial);
+end;
+
+function Thin_SyncTrialActivation: TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SyncTrialActivation';
+
+function SyncTrialActivation: TLAKeyStatus;
+begin
+  Result := ELAError.CheckKeyStatus(Thin_SyncTrialActivation);
 end;
 
 function Thin_ActivateTrialOffline(const filePath: PWideChar): TLAStatusCode; cdecl;
