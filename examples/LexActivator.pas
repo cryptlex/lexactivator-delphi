@@ -1463,6 +1463,27 @@ procedure DecrementActivationMeterAttributeUses(const Name: UnicodeString; Decre
 procedure ResetActivationMeterAttributeUses(const Name: UnicodeString);
 
 (*
+    PROCEDURE: MigrateToSystemWideActivation()
+
+    PURPOSE: Migrates existing license data to system-wide storage.
+
+    Call this function after SetProductData().
+
+    If you intend to use a custom data directory after migration,
+    set it first using SetDataDirectory().
+
+    PARAMETERS:
+    * OldPermissionFlag - permission flag used previously
+
+    RETURN CODES: LA_OK, LA_E_FILE_PERMISSION, LA_E_PRODUCT_DATA,
+    LA_E_INVALID_PERMISSION_FLAG, LA_E_SYSTEM_PERMISSION, LA_FAIL
+
+    NOTE: The function does not support migration from custom data directories.
+*)
+
+procedure MigrateToSystemWideActivation(OldPermissionFlag: TLAFlags);
+
+(*
     PROCEDURE: LAReset()
 
     PURPOSE: Resets the activation and trial data stored in the machine.
@@ -4916,6 +4937,16 @@ begin
   if not ELAError.CheckOKFail(Thin_ResetActivationMeterAttributeUses(PWideChar(Name))) then
     raise
     ELAFailException.CreateFmt('Failed to reset the meter attribute %s uses consumed by the activation', [Name]);
+end;
+
+function Thin_MigrateToSystemWideActivation(flags: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'MigrateToSystemWideActivation';
+
+procedure MigrateToSystemWideActivation(OldPermissionFlag: TLAFlags);
+begin
+  if not ELAError.CheckOKFail(Thin_MigrateToSystemWideActivation(LAFlagsToLongWord[OldPermissionFlag])) then
+    raise
+    ELAFailException.Create('Migration to syswide storage failed');
 end;
 
 function Thin_Reset: TLAStatusCode; cdecl;
