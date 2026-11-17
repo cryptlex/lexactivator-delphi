@@ -92,6 +92,35 @@ type
     ExpiresAt: Int64;
   end;
 
+type
+  // LA_RESOURCE_TYPE_PRODUCT, LA_RESOURCE_TYPE_LICENSE, LA_RESOURCE_TYPE_USER,
+  // LA_RESOURCE_TYPE_ACTIVATION, LA_RESOURCE_TYPE_TRIAL_ACTIVATION,
+  // LA_RESOURCE_TYPE_ORGANIZATION
+  TLAResourceType = (lrtProduct, lrtLicense, lrtUser, lrtActivation,
+    lrtTrialActivation, lrtOrganization);
+
+type
+  TLACustomAttribute = record
+    Name: UnicodeString;
+    Value: UnicodeString;
+    DataType: UnicodeString;
+    ResourceType: UInt32; // raw LA_RESOURCE_TYPE_* value
+  end;
+
+type
+  TLADataStoreInfo = record
+    StorageKind: UnicodeString;
+    PermissionFlag: UnicodeString;
+    IsCustomDataDirectory: Boolean;
+    Path: UnicodeString;
+  end;
+
+type
+  TLALicenseLookupInfo = record
+    Key: UnicodeString;
+    &Type: UnicodeString;
+  end;
+
 function LAFlagsToString(Item: TLAFlags): string;
 function LAKeyStatusToString(Item: TLAKeyStatus): string;
 
@@ -1562,6 +1591,167 @@ procedure MigrateToSystemWideActivation(OldPermissionFlag: TLAFlags);
 
 procedure LAReset;
 
+(*
+    PROCEDURE: SetCustomAttribute()
+
+    PURPOSE: Sets a custom attribute on the given resource.
+
+    Only license, activation and trial activation resources can be written
+    from the client.
+
+    PARAMETERS:
+    * ResourceType - resource the attribute belongs to
+    * Name - name of the custom attribute
+    * Value - value of the custom attribute
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    ELACustomAttributeResourceTypeInvalidException,
+    ELACustomAttributeNameLengthException,
+    ELACustomAttributeValueLengthException, ELACustomAttributeLimitException,
+    ELACustomAttributeAccessDeniedException
+*)
+
+procedure SetCustomAttribute(ResourceType: TLAResourceType; const Name, Value: UnicodeString);
+
+(*
+    PROCEDURE: SetReleasePlatform()
+
+    PURPOSE: Sets the release platform e.g. windows, macos, linux
+
+    The release platform appears along with the activation details in dashboard.
+
+    PARAMETERS:
+    * ReleasePlatform - release platform e.g. windows, macos, linux
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELAReleasePlatformLengthException
+*)
+
+procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
+
+(*
+    PROCEDURE: SetReleaseChannel()
+
+    PURPOSE: Sets the release channel e.g. stable, beta
+
+    The release channel appears along with the activation details in dashboard.
+
+    PARAMETERS:
+    * ReleaseChannel - release channel e.g. stable
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELAReleaseChannelLengthException
+*)
+
+procedure SetReleaseChannel(const ReleaseChannel: UnicodeString);
+
+(*
+    PROCEDURE: SetTlsPeerVerification()
+
+    PURPOSE: Enables or disables the TLS peer verification.
+
+    PARAMETERS:
+    * Enable - False to disable the verification, True to enable it
+
+    NOTE: This function only has an effect on Linux builds of the library.
+*)
+
+procedure SetTlsPeerVerification(Enable: Boolean);
+
+(*
+    PROCEDURE: SetTlsTrustStore()
+
+    PURPOSE: Sets the CA bundle file and/or the CA directory used to verify
+    the TLS peer.
+
+    PARAMETERS:
+    * CaBundleFilePath - path of the CA bundle file, empty string to skip
+    * CaDirectoryPath - path of the CA directory, empty string to skip
+
+    NOTE: This function only has an effect on Linux builds of the library.
+*)
+
+procedure SetTlsTrustStore(const CaBundleFilePath, CaDirectoryPath: UnicodeString);
+
+(*
+    FUNCTION: GetActivationCreationDate()
+
+    PURPOSE: Gets the activation creation date timestamp.
+
+    RESULT: Activation creation date timestamp
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
+    ELATimeModifiedException
+*)
+
+function GetActivationCreationDate: TDateTime;
+
+(*
+    FUNCTION: GetCustomAttribute()
+
+    PURPOSE: Gets the value of a custom attribute of the given resource.
+
+    PARAMETERS:
+    * ResourceType - resource the attribute belongs to
+    * Name - name of the custom attribute
+
+    RESULT: Value of the custom attribute
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELACustomAttributeResourceTypeInvalidException,
+    ELACustomAttributeNotFoundException, ELABufferSizeException
+*)
+
+function GetCustomAttribute(ResourceType: TLAResourceType; const Name: UnicodeString): UnicodeString;
+
+(*
+    FUNCTION: GetCustomAttributes()
+
+    PURPOSE: Gets all the custom attributes of the given resource.
+
+    PARAMETERS:
+    * ResourceType - resource the attributes belong to
+
+    RESULT: Array of custom attributes
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException,
+    ELACustomAttributeResourceTypeInvalidException, ELABufferSizeException
+*)
+
+function GetCustomAttributes(ResourceType: TLAResourceType): TArray<TLACustomAttribute>;
+
+(*
+    FUNCTION: GetDataStoreInfo()
+
+    PURPOSE: Gets the information about the data store used by the library.
+
+    It must be called after SetProductId().
+
+    RESULT: Storage kind, permission flag and path of the data store
+
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELABufferSizeException
+*)
+
+function GetDataStoreInfo: TLADataStoreInfo;
+
+(*
+    FUNCTION: LookupLicense()
+
+    PURPOSE: Looks up the license on the server and returns its key and type
+    e.g. node-locked, hosted-floating.
+
+    PARAMETERS:
+    * LicenseKey - license key to look up
+
+    RESULT: Key and type of the license
+
+    EXCEPTIONS: ELAFailException, ELAProductDataException,
+    ELALicenseKeyException, ELAInetException, ELAServerException,
+    ELAClientException, ELARateLimitException, ELABufferSizeException
+*)
+
+function LookupLicense(const LicenseKey: UnicodeString): TLALicenseLookupInfo;
+
 (*** Exceptions ***)
 
 type
@@ -2362,6 +2552,152 @@ type
     constructor Create;
   end;
 
+    (*
+        CODE: LA_E_RELEASE_VERSION_NOT_ALLOWED
+
+        MESSAGE: The release version is not allowed.
+    *)
+
+  ELAReleaseVersionNotAllowedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_DEVICE_NOT_FOUND
+
+        MESSAGE: Device not found.
+    *)
+
+  ELADeviceNotFoundException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_DEVICE_VALIDATION_FAILED
+
+        MESSAGE: Device validation failed.
+    *)
+
+  ELADeviceValidationFailedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_FINGERPRINT_VALIDATION_GRACE_PERIOD_OVER
+
+        MESSAGE: Fingerprint validation grace period is over. Please connect to internet and restart the application.
+    *)
+
+  ELAFingerprintValidationGracePeriodOverException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_ACTIVATION_CLONE_DETECTED
+
+        MESSAGE: Activation clone detected.
+    *)
+
+  ELAActivationCloneDetectedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_INSUFFICIENT_SYSTEM_RESOURCES
+
+        MESSAGE: Insufficient system resources to complete the operation.
+    *)
+
+  ELAInsufficientSystemResourcesException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_NAME_LENGTH
+
+        MESSAGE: The custom attribute name length is more than 256 characters.
+    *)
+
+  ELACustomAttributeNameLengthException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_VALUE_LENGTH
+
+        MESSAGE: The custom attribute value length is more than 1024 characters.
+    *)
+
+  ELACustomAttributeValueLengthException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_LIMIT
+
+        MESSAGE: The maximum allowed number of custom attributes has already
+        been set.
+    *)
+
+  ELACustomAttributeLimitException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_NOT_FOUND
+
+        MESSAGE: The custom attribute does not exist, or the application does
+        not have read access to it.
+    *)
+
+  ELACustomAttributeNotFoundException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_RESOURCE_TYPE_INVALID
+
+        MESSAGE: Invalid custom attribute resource type.
+    *)
+
+  ELACustomAttributeResourceTypeInvalidException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_ACCESS_DENIED
+
+        MESSAGE: The application does not have write access to the custom
+        attribute.
+    *)
+
+  ELACustomAttributeAccessDeniedException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_INVALID
+
+        MESSAGE: Invalid custom attribute.
+    *)
+
+  ELACustomAttributeInvalidException = class(ELAException)
+  public
+    constructor Create;
+  end;
+
 implementation
 
 uses
@@ -2977,6 +3313,113 @@ const
     *)
 
   LA_E_LICENSE_NOT_EFFECTIVE = TLAStatusCode(110);
+
+    (*
+        CODE: LA_E_RELEASE_VERSION_NOT_ALLOWED
+
+        MESSAGE: The release version is not allowed.
+    *)
+
+  LA_E_RELEASE_VERSION_NOT_ALLOWED = TLAStatusCode(77);
+
+    (*
+        CODE: LA_E_DEVICE_NOT_FOUND
+
+        MESSAGE: Device not found.
+    *)
+
+  LA_E_DEVICE_NOT_FOUND = TLAStatusCode(111);
+
+    (*
+        CODE: LA_E_DEVICE_VALIDATION_FAILED
+
+        MESSAGE: Device validation failed.
+    *)
+
+  LA_E_DEVICE_VALIDATION_FAILED = TLAStatusCode(112);
+
+    (*
+        CODE: LA_E_FINGERPRINT_VALIDATION_GRACE_PERIOD_OVER
+
+        MESSAGE: Fingerprint validation grace period is over. Please connect to internet and restart the application.
+    *)
+
+  LA_E_FINGERPRINT_VALIDATION_GRACE_PERIOD_OVER = TLAStatusCode(113);
+
+    (*
+        CODE: LA_E_ACTIVATION_CLONE_DETECTED
+
+        MESSAGE: Activation clone detected.
+    *)
+
+  LA_E_ACTIVATION_CLONE_DETECTED = TLAStatusCode(114);
+
+    (*
+        CODE: LA_E_INSUFFICIENT_SYSTEM_RESOURCES
+
+        MESSAGE: Insufficient system resources to complete the operation.
+    *)
+
+  LA_E_INSUFFICIENT_SYSTEM_RESOURCES = TLAStatusCode(118);
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_NAME_LENGTH
+
+        MESSAGE: The custom attribute name length is more than 256 characters.
+    *)
+
+  LA_E_CUSTOM_ATTRIBUTE_NAME_LENGTH = TLAStatusCode(119);
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_VALUE_LENGTH
+
+        MESSAGE: The custom attribute value length is more than 1024 characters.
+    *)
+
+  LA_E_CUSTOM_ATTRIBUTE_VALUE_LENGTH = TLAStatusCode(120);
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_LIMIT
+
+        MESSAGE: The maximum allowed number of custom attributes has already
+        been set.
+    *)
+
+  LA_E_CUSTOM_ATTRIBUTE_LIMIT = TLAStatusCode(121);
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_NOT_FOUND
+
+        MESSAGE: The custom attribute does not exist, or the application does
+        not have read access to it.
+    *)
+
+  LA_E_CUSTOM_ATTRIBUTE_NOT_FOUND = TLAStatusCode(122);
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_RESOURCE_TYPE_INVALID
+
+        MESSAGE: Invalid custom attribute resource type.
+    *)
+
+  LA_E_CUSTOM_ATTRIBUTE_RESOURCE_TYPE_INVALID = TLAStatusCode(123);
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_ACCESS_DENIED
+
+        MESSAGE: The application does not have write access to the custom
+        attribute.
+    *)
+
+  LA_E_CUSTOM_ATTRIBUTE_ACCESS_DENIED = TLAStatusCode(124);
+
+    (*
+        CODE: LA_E_CUSTOM_ATTRIBUTE_INVALID
+
+        MESSAGE: Invalid custom attribute.
+    *)
+
+  LA_E_CUSTOM_ATTRIBUTE_INVALID = TLAStatusCode(125);
 
 (*********************************************************************************)
 
@@ -5050,6 +5493,294 @@ begin
     ELAFailException.Create('Failed to reset the activation and trial data');
 end;
 
+(*********************************************************************************)
+
+// The imports below are bound with "delayed", so they are resolved on first
+// call instead of at program start. An application that never calls them
+// keeps loading with an older LexActivator.dll that does not export them.
+
+{$WARN SYMBOL_PLATFORM OFF}
+
+const
+  LAResourceTypeToLongWord: array[TLAResourceType] of LongWord = (1, 2, 4, 8, 16, 32);
+
+function LAJSONStrValue(const JSONObject: TJSONObject; const FieldName: string): UnicodeString;
+var
+  JSONValue: TJSONValue;
+begin
+  Result := '';
+  JSONValue := JSONObject.GetValue(FieldName);
+  if (JSONValue <> nil) and not (JSONValue is TJSONNull) then
+    Result := JSONValue.Value;
+end;
+
+function LAJSONInt64Value(const JSONObject: TJSONObject; const FieldName: string): Int64;
+var
+  JSONValue: TJSONValue;
+begin
+  Result := 0;
+  JSONValue := JSONObject.GetValue(FieldName);
+  if (JSONValue <> nil) and not (JSONValue is TJSONNull) then
+    Result := StrToInt64Def(JSONValue.Value, 0);
+end;
+
+// accepts true/false as well as 1/0
+function LAJSONBoolValue(const JSONObject: TJSONObject; const FieldName: string): Boolean;
+var
+  JSONValue: TJSONValue;
+  ValueText: string;
+begin
+  Result := False;
+  JSONValue := JSONObject.GetValue(FieldName);
+  if JSONValue <> nil then
+  begin
+    ValueText := JSONValue.ToString;
+    Result := SameText(ValueText, 'true') or (ValueText = '1');
+  end;
+end;
+
+function Thin_SetCustomAttribute(resourceType: LongWord; const attributeName, attributeValue: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetCustomAttribute' delayed;
+
+procedure SetCustomAttribute(ResourceType: TLAResourceType; const Name, Value: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetCustomAttribute(
+      LAResourceTypeToLongWord[ResourceType], PWideChar(Name), PWideChar(Value))) then
+    raise
+    ELAFailException.CreateFmt('Failed to set the custom attribute %s', [Name]);
+end;
+
+function Thin_SetReleasePlatform(const releasePlatform: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetReleasePlatform' delayed;
+
+procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetReleasePlatform(PWideChar(ReleasePlatform))) then
+    raise
+    ELAFailException.CreateFmt('Failed to set the release platform to %s', [ReleasePlatform]);
+end;
+
+function Thin_SetReleaseChannel(const releaseChannel: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetReleaseChannel' delayed;
+
+procedure SetReleaseChannel(const ReleaseChannel: UnicodeString);
+begin
+  if not ELAError.CheckOKFail(Thin_SetReleaseChannel(PWideChar(ReleaseChannel))) then
+    raise
+    ELAFailException.CreateFmt('Failed to set the release channel to %s', [ReleaseChannel]);
+end;
+
+function Thin_SetTlsPeerVerification(enable: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetTlsPeerVerification' delayed;
+
+procedure SetTlsPeerVerification(Enable: Boolean);
+var
+  EnableValue: LongWord;
+begin
+  if Enable then EnableValue := 1 else EnableValue := 0;
+  if not ELAError.CheckOKFail(Thin_SetTlsPeerVerification(EnableValue)) then
+    raise
+    ELAFailException.Create('Failed to set the TLS peer verification');
+end;
+
+function Thin_SetTlsTrustStore(const caBundleFilePath, caDirectoryPath: PWideChar): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'SetTlsTrustStore' delayed;
+
+procedure SetTlsTrustStore(const CaBundleFilePath, CaDirectoryPath: UnicodeString);
+begin
+  // Pointer() of an empty string is nil, which the library accepts as
+  // "not specified"
+  if not ELAError.CheckOKFail(Thin_SetTlsTrustStore(
+      PWideChar(Pointer(CaBundleFilePath)), PWideChar(Pointer(CaDirectoryPath)))) then
+    raise
+    ELAFailException.Create('Failed to set the TLS trust store');
+end;
+
+function Thin_GetActivationCreationDate(out activationCreationDate: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetActivationCreationDate' delayed;
+
+function GetActivationCreationDate: TDateTime;
+var
+  ActivationCreationDate: LongWord;
+begin
+  if not ELAError.CheckOKFail(Thin_GetActivationCreationDate(ActivationCreationDate)) then
+    raise
+    ELAFailException.Create('Failed to get the activation creation date timestamp');
+  Result := UnixToDateTime(ActivationCreationDate);
+end;
+
+function Thin_GetCustomAttribute(resourceType: LongWord; const attributeName: PWideChar; out attributeValue; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetCustomAttribute' delayed;
+
+function GetCustomAttribute(ResourceType: TLAResourceType; const Name: UnicodeString): UnicodeString;
+var
+  ErrorCode: TLAStatusCode;
+  Buffer: UnicodeString;
+  Size: Integer;
+begin
+  Result := '';
+  Size := 2048;
+  repeat
+    Size := Size * 2;
+    SetLength(Buffer, 0);
+    SetLength(Buffer, Size);
+    ErrorCode := Thin_GetCustomAttribute(LAResourceTypeToLongWord[ResourceType],
+      PWideChar(Name), PWideChar(Buffer)^, Size);
+  until (ErrorCode <> LA_E_BUFFER_SIZE) or (Size >= 128 * 1024);
+
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.CreateFmt('Failed to get the custom attribute %s', [Name]);
+
+  Result := PWideChar(Buffer);
+end;
+
+function Thin_GetCustomAttributes(resourceType: LongWord; out customAttributes; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetCustomAttributesInternal' delayed;
+
+function GetCustomAttributes(ResourceType: TLAResourceType): TArray<TLACustomAttribute>;
+var
+  ErrorCode: TLAStatusCode;
+  Buffer: UnicodeString;
+  JSONString: UnicodeString;
+  Size: Integer;
+  JSONValue: TJSONValue;
+  JSONArray: TJSONArray;
+  Item: TJSONValue;
+  ItemObject: TJSONObject;
+  I, Count: Integer;
+begin
+  Result := nil;
+  Size := 128 * 1024;
+  repeat
+    Size := Size * 2;
+    SetLength(Buffer, 0);
+    SetLength(Buffer, Size);
+    ErrorCode := Thin_GetCustomAttributes(LAResourceTypeToLongWord[ResourceType],
+      PWideChar(Buffer)^, Size);
+  until (ErrorCode <> LA_E_BUFFER_SIZE) or (Size >= 1024 * 1024);
+
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the custom attributes');
+
+  JSONString := PWideChar(Buffer);
+  if JSONString = '' then
+    Exit;
+
+  JSONValue := TJSONObject.ParseJSONValue(JSONString);
+  try
+    if not (JSONValue is TJSONArray) then
+      Exit;
+    JSONArray := TJSONArray(JSONValue);
+
+    SetLength(Result, JSONArray.Count);
+    Count := 0;
+    for I := 0 to JSONArray.Count - 1 do
+    begin
+      Item := JSONArray.Items[I];
+      if not (Item is TJSONObject) then
+        Continue;
+      ItemObject := TJSONObject(Item);
+      Result[Count].Name := LAJSONStrValue(ItemObject, 'name');
+      Result[Count].Value := LAJSONStrValue(ItemObject, 'value');
+      Result[Count].DataType := LAJSONStrValue(ItemObject, 'dataType');
+      Result[Count].ResourceType := UInt32(LAJSONInt64Value(ItemObject, 'resourceType'));
+      Inc(Count);
+    end;
+    SetLength(Result, Count);
+  finally
+    JSONValue.Free;
+  end;
+end;
+
+function Thin_GetDataStoreInfo(out dataStoreInfo; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'GetDataStoreInfoInternal' delayed;
+
+function GetDataStoreInfo: TLADataStoreInfo;
+var
+  ErrorCode: TLAStatusCode;
+  Buffer: UnicodeString;
+  JSONString: UnicodeString;
+  Size: Integer;
+  JSONValue: TJSONValue;
+  JSONObject: TJSONObject;
+begin
+  Result.StorageKind := '';
+  Result.PermissionFlag := '';
+  Result.IsCustomDataDirectory := False;
+  Result.Path := '';
+
+  Size := 1024;
+  repeat
+    Size := Size * 2;
+    SetLength(Buffer, 0);
+    SetLength(Buffer, Size);
+    ErrorCode := Thin_GetDataStoreInfo(PWideChar(Buffer)^, Size);
+  until (ErrorCode <> LA_E_BUFFER_SIZE) or (Size >= 128 * 1024);
+
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to get the data store info');
+
+  JSONString := PWideChar(Buffer);
+  if JSONString = '' then
+    Exit;
+
+  JSONValue := TJSONObject.ParseJSONValue(JSONString);
+  try
+    if not (JSONValue is TJSONObject) then
+      Exit;
+    JSONObject := TJSONObject(JSONValue);
+
+    Result.StorageKind := LAJSONStrValue(JSONObject, 'storageKind');
+    Result.PermissionFlag := LAJSONStrValue(JSONObject, 'permissionFlag');
+    Result.IsCustomDataDirectory := LAJSONBoolValue(JSONObject, 'isCustomDataDirectory');
+    Result.Path := LAJSONStrValue(JSONObject, 'path');
+  finally
+    JSONValue.Free;
+  end;
+end;
+
+function Thin_LookupLicense(const licenseKey: PWideChar; out licenseLookupInfo; length: LongWord): TLAStatusCode; cdecl;
+  external LexActivator_DLL name 'LookupLicenseInternal' delayed;
+
+function LookupLicense(const LicenseKey: UnicodeString): TLALicenseLookupInfo;
+var
+  ErrorCode: TLAStatusCode;
+  Buffer: UnicodeString;
+  JSONString: UnicodeString;
+  Size: Integer;
+  JSONValue: TJSONValue;
+  JSONObject: TJSONObject;
+begin
+  Result.Key := '';
+  Result.&Type := '';
+
+  // single attempt: every call is a server request
+  Size := 4096;
+  SetLength(Buffer, Size);
+  ErrorCode := Thin_LookupLicense(PWideChar(LicenseKey), PWideChar(Buffer)^, Size);
+
+  if not ELAError.CheckOKFail(ErrorCode) then
+    raise ELAFailException.Create('Failed to look up the license');
+
+  JSONString := PWideChar(Buffer);
+  if JSONString = '' then
+    Exit;
+
+  JSONValue := TJSONObject.ParseJSONValue(JSONString);
+  try
+    if not (JSONValue is TJSONObject) then
+      Exit;
+    JSONObject := TJSONObject(JSONValue);
+
+    Result.Key := LAJSONStrValue(JSONObject, 'key');
+    Result.&Type := LAJSONStrValue(JSONObject, 'type');
+  finally
+    JSONValue.Free;
+  end;
+end;
+
+{$WARN SYMBOL_PLATFORM ON}
+
 class function ELAError.CreateByCode(ErrorCode: TLAStatusCode): ELAError;
 begin
   case ErrorCode of
@@ -5123,6 +5854,19 @@ begin
     LA_E_FEATURE_ENTITLEMENT_NOT_FOUND: Result := ELAFeatureEntitlementNotFoundException.Create;
     LA_E_ENTITLEMENT_SET_NOT_LINKED: Result := ELAEntitlementSetNotLinkedException.Create;
     LA_E_LICENSE_NOT_EFFECTIVE: Result := ELALicenseNotEffectiveException.Create;
+    LA_E_RELEASE_VERSION_NOT_ALLOWED: Result := ELAReleaseVersionNotAllowedException.Create;
+    LA_E_DEVICE_NOT_FOUND: Result := ELADeviceNotFoundException.Create;
+    LA_E_DEVICE_VALIDATION_FAILED: Result := ELADeviceValidationFailedException.Create;
+    LA_E_FINGERPRINT_VALIDATION_GRACE_PERIOD_OVER: Result := ELAFingerprintValidationGracePeriodOverException.Create;
+    LA_E_ACTIVATION_CLONE_DETECTED: Result := ELAActivationCloneDetectedException.Create;
+    LA_E_INSUFFICIENT_SYSTEM_RESOURCES: Result := ELAInsufficientSystemResourcesException.Create;
+    LA_E_CUSTOM_ATTRIBUTE_NAME_LENGTH: Result := ELACustomAttributeNameLengthException.Create;
+    LA_E_CUSTOM_ATTRIBUTE_VALUE_LENGTH: Result := ELACustomAttributeValueLengthException.Create;
+    LA_E_CUSTOM_ATTRIBUTE_LIMIT: Result := ELACustomAttributeLimitException.Create;
+    LA_E_CUSTOM_ATTRIBUTE_NOT_FOUND: Result := ELACustomAttributeNotFoundException.Create;
+    LA_E_CUSTOM_ATTRIBUTE_RESOURCE_TYPE_INVALID: Result := ELACustomAttributeResourceTypeInvalidException.Create;
+    LA_E_CUSTOM_ATTRIBUTE_ACCESS_DENIED: Result := ELACustomAttributeAccessDeniedException.Create;
+    LA_E_CUSTOM_ATTRIBUTE_INVALID: Result := ELACustomAttributeInvalidException.Create;
   else
     Result := ELAUnknownErrorCodeException.Create(ErrorCode);
   end;
@@ -5620,6 +6364,84 @@ constructor ELALicenseNotEffectiveException.Create;
 begin
   inherited Create('The license cannot be activated before its effective date');
   FErrorCode := LA_E_LICENSE_NOT_EFFECTIVE;
+end;
+
+constructor ELAReleaseVersionNotAllowedException.Create;
+begin
+  inherited Create('The release version is not allowed');
+  FErrorCode := LA_E_RELEASE_VERSION_NOT_ALLOWED;
+end;
+
+constructor ELADeviceNotFoundException.Create;
+begin
+  inherited Create('Device not found');
+  FErrorCode := LA_E_DEVICE_NOT_FOUND;
+end;
+
+constructor ELADeviceValidationFailedException.Create;
+begin
+  inherited Create('Device validation failed');
+  FErrorCode := LA_E_DEVICE_VALIDATION_FAILED;
+end;
+
+constructor ELAFingerprintValidationGracePeriodOverException.Create;
+begin
+  inherited Create('Fingerprint validation grace period is over. Please connect to internet and restart the application');
+  FErrorCode := LA_E_FINGERPRINT_VALIDATION_GRACE_PERIOD_OVER;
+end;
+
+constructor ELAActivationCloneDetectedException.Create;
+begin
+  inherited Create('Activation clone detected');
+  FErrorCode := LA_E_ACTIVATION_CLONE_DETECTED;
+end;
+
+constructor ELAInsufficientSystemResourcesException.Create;
+begin
+  inherited Create('Insufficient system resources to complete the operation');
+  FErrorCode := LA_E_INSUFFICIENT_SYSTEM_RESOURCES;
+end;
+
+constructor ELACustomAttributeNameLengthException.Create;
+begin
+  inherited Create('The custom attribute name length is more than 256 characters');
+  FErrorCode := LA_E_CUSTOM_ATTRIBUTE_NAME_LENGTH;
+end;
+
+constructor ELACustomAttributeValueLengthException.Create;
+begin
+  inherited Create('The custom attribute value length is more than 1024 characters');
+  FErrorCode := LA_E_CUSTOM_ATTRIBUTE_VALUE_LENGTH;
+end;
+
+constructor ELACustomAttributeLimitException.Create;
+begin
+  inherited Create('The maximum allowed number of custom attributes has already been set');
+  FErrorCode := LA_E_CUSTOM_ATTRIBUTE_LIMIT;
+end;
+
+constructor ELACustomAttributeNotFoundException.Create;
+begin
+  inherited Create('The custom attribute does not exist, or the application does not have read access to it');
+  FErrorCode := LA_E_CUSTOM_ATTRIBUTE_NOT_FOUND;
+end;
+
+constructor ELACustomAttributeResourceTypeInvalidException.Create;
+begin
+  inherited Create('Invalid custom attribute resource type');
+  FErrorCode := LA_E_CUSTOM_ATTRIBUTE_RESOURCE_TYPE_INVALID;
+end;
+
+constructor ELACustomAttributeAccessDeniedException.Create;
+begin
+  inherited Create('The application does not have write access to the custom attribute');
+  FErrorCode := LA_E_CUSTOM_ATTRIBUTE_ACCESS_DENIED;
+end;
+
+constructor ELACustomAttributeInvalidException.Create;
+begin
+  inherited Create('Invalid custom attribute');
+  FErrorCode := LA_E_CUSTOM_ATTRIBUTE_INVALID;
 end;
 
 initialization
