@@ -1594,17 +1594,42 @@ procedure LAReset;
 (*
     PROCEDURE: SetCustomAttribute()
 
-    PURPOSE: Sets a custom attribute on the given resource.
+    PURPOSE: Sets the value of the custom attribute for the specified resource type.
 
-    Only license, activation and trial activation resources can be written
-    from the client.
+    If the custom attribute is required, this function must be called before the
+    license or trial is activated.
+
+    GetCustomAttribute() does not return the value until the license or trial has
+    been activated or synced.
+
+    Setting an existing custom attribute overwrites its value. A value cannot be
+    removed, but an empty string is a valid value.
+
+    A license custom attribute must grant the application read-write access. Activation
+    custom attributes are always read-write. Setting a read only license custom
+    attribute raises ELACustomAttributeAccessDeniedException.
 
     PARAMETERS:
-    * ResourceType - resource the attribute belongs to
-    * Name - name of the custom attribute
-    * Value - value of the custom attribute
+    * ResourceType - the resource on which to set the custom attribute. Pass exactly
+      one of the following values: lrtLicense, lrtActivation, lrtTrialActivation.
+      The product, user and organization custom attributes cannot be set by the
+      application and raise ELACustomAttributeResourceTypeInvalidException.
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+      - lrtLicense: Sets the custom attribute on the license. The
+        value appears along with the license details in the dashboard.
+
+      - lrtActivation: Sets the custom attribute on the activation.
+        The value appears along with the activation details of the license in the
+        dashboard.
+
+      - lrtTrialActivation: Sets the custom attribute on the trial
+        activation. The value appears along with the trial activation details of the
+        product in the dashboard.
+
+    * Name - name of the custom attribute.
+    * Value - value of the custom attribute, of maximum length 1024 characters.
+
+    EXCEPTIONS: ELAProductIdException, ELALicenseKeyException,
     ELACustomAttributeResourceTypeInvalidException,
     ELACustomAttributeNameLengthException,
     ELACustomAttributeValueLengthException, ELACustomAttributeLimitException,
@@ -1623,8 +1648,7 @@ procedure SetCustomAttribute(ResourceType: TLAResourceType; const Name, Value: U
     PARAMETERS:
     * ReleasePlatform - release platform e.g. windows, macos, linux
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException,
-    ELAReleasePlatformLengthException
+    EXCEPTIONS: ELAProductIdException, ELAReleasePlatformLengthException
 *)
 
 procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
@@ -1639,8 +1663,7 @@ procedure SetReleasePlatform(const ReleasePlatform: UnicodeString);
     PARAMETERS:
     * ReleaseChannel - release channel e.g. stable
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException,
-    ELAReleaseChannelLengthException
+    EXCEPTIONS: ELAProductIdException, ELAReleaseChannelLengthException
 *)
 
 procedure SetReleaseChannel(const ReleaseChannel: UnicodeString);
@@ -1648,12 +1671,37 @@ procedure SetReleaseChannel(const ReleaseChannel: UnicodeString);
 (*
     PROCEDURE: SetTlsPeerVerification()
 
-    PURPOSE: Enables or disables the TLS peer verification.
+    PURPOSE: Enables or disables TLS/SSL peer certificate verification.
+
+    Use Enable = True to explicitly enable verification. Use SetTlsTrustStore() to
+    specify the certificate bundle or CA directory explicitly; otherwise the SDK
+    probes the following standard system paths and uses the first one found:
+
+    CA bundle file candidates (CURLOPT_CAINFO), in order:
+      /etc/ssl/certs/ca-certificates.crt
+      /etc/pki/tls/certs/ca-bundle.crt
+      /etc/ssl/ca-bundle.pem
+      /etc/pki/tls/cacert.pem
+      /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+      /etc/ssl/cert.pem
+      /etc/openssl/certs/ca-certificates.crt
+      /usr/local/etc/ssl/cert.pem
+      /usr/local/etc/openssl/cert.pem
+      /usr/local/share/certs/ca-root-nss.crt
+
+    CA directory candidates (CURLOPT_CAPATH), in order:
+      /etc/ssl/certs
+      /etc/pki/tls/certs
+      /etc/openssl/certs
+
+    NOTE: This function is only supported on Linux. On Linux, TLS/SSL peer
+    verification is disabled by default; on all other platforms, it is enabled
+    by default, and this function has no effect.
 
     PARAMETERS:
-    * Enable - False to disable the verification, True to enable it
+    * Enable - False to disable peer verification, True to enable it.
 
-    NOTE: This function only has an effect on Linux builds of the library.
+    RETURN CODES: LA_OK
 *)
 
 procedure SetTlsPeerVerification(Enable: Boolean);
@@ -1661,14 +1709,20 @@ procedure SetTlsPeerVerification(Enable: Boolean);
 (*
     PROCEDURE: SetTlsTrustStore()
 
-    PURPOSE: Sets the CA bundle file and/or the CA directory used to verify
-    the TLS peer.
+    PURPOSE: Specifies the certificate bundle file and/or CA directory the SDK uses
+    to validate server certificates over HTTPS; if not called the standard system CA paths
+    are probed automatically when verification is enabled. See SetTlsPeerVerification()
+    for the list of candidate paths used during automatic resolution.
+
+    NOTE: This function is only supported on Linux. It only configures the trust store;
+    call SetTlsPeerVerification(True) to enable verification. If both arguments are empty
+    (passed as NULL) or point to unresolvable paths, standard system paths are used.
 
     PARAMETERS:
-    * CaBundleFilePath - path of the CA bundle file, empty string to skip
-    * CaDirectoryPath - path of the CA directory, empty string to skip
+    * CaBundleFilePath - path to a certificate bundle file (CURLOPT_CAINFO)
+    * CaDirectoryPath - path to a directory of CA certificates (CURLOPT_CAPATH)
 
-    NOTE: This function only has an effect on Linux builds of the library.
+    RETURN CODES: LA_OK
 *)
 
 procedure SetTlsTrustStore(const CaBundleFilePath, CaDirectoryPath: UnicodeString);
@@ -1676,12 +1730,12 @@ procedure SetTlsTrustStore(const CaBundleFilePath, CaDirectoryPath: UnicodeStrin
 (*
     FUNCTION: GetActivationCreationDate()
 
-    PURPOSE: Gets the activation creation date timestamp.
+    PURPOSE: Gets the activation creation date timestamp for the current activation.
 
-    RESULT: Activation creation date timestamp
+    RESULT: Activation creation date timestamp.
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELATimeException,
-    ELATimeModifiedException
+    EXCEPTIONS: ELAFailException, ELAProductIdException, ELALicenseKeyException,
+    ELATimeException, ELATimeModifiedException
 *)
 
 function GetActivationCreationDate: TDateTime;
@@ -1689,13 +1743,40 @@ function GetActivationCreationDate: TDateTime;
 (*
     FUNCTION: GetCustomAttribute()
 
-    PURPOSE: Gets the value of a custom attribute of the given resource.
+    PURPOSE: Gets the value of the custom attribute for the specified resource type.
+
+    Only the custom attributes which grant the application read access are available. An
+    attribute whose application access is set to none behaves as if it does not exist and
+    raises ELACustomAttributeNotFoundException.
+
+    A value set with SetCustomAttribute() is not returned by this function until the license
+    or trial has been activated or synced.
 
     PARAMETERS:
-    * ResourceType - resource the attribute belongs to
-    * Name - name of the custom attribute
+    * ResourceType - the resource on which the custom attribute is defined. Pass exactly
+      one of the following values: lrtProduct, lrtLicense, lrtUser, lrtActivation,
+      lrtTrialActivation, lrtOrganization.
 
-    RESULT: Value of the custom attribute
+      - lrtProduct: Gets the custom attribute defined on the product. This is
+        available for trial as well as license activations.
+
+      - lrtLicense: Gets the custom attribute defined on the license.
+
+      - lrtUser: Gets the custom attribute defined on the user the license is
+        assigned to.
+
+      - lrtActivation: Gets the custom attribute defined on the current
+        activation.
+
+      - lrtTrialActivation: Gets the custom attribute defined on the current
+        trial activation.
+
+      - lrtOrganization: Gets the custom attribute defined on the organization the license
+        is linked to.
+
+    * Name - name of the custom attribute to retrieve the value.
+
+    RESULT: Value of the custom attribute.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException,
     ELACustomAttributeResourceTypeInvalidException,
@@ -1707,12 +1788,16 @@ function GetCustomAttribute(ResourceType: TLAResourceType; const Name: UnicodeSt
 (*
     FUNCTION: GetCustomAttributes()
 
-    PURPOSE: Gets all the custom attributes of the given resource.
+    PURPOSE: Gets the custom attributes for the specified resource type.
+
+    Only the custom attributes which grant the application read access are returned.
 
     PARAMETERS:
-    * ResourceType - resource the attributes belong to
+    * ResourceType - the resource on which the custom attributes are defined. Pass exactly
+      one of the following values: lrtProduct, lrtLicense, lrtUser, lrtActivation,
+      lrtTrialActivation, lrtOrganization.
 
-    RESULT: Array of custom attributes
+    RESULT: Array of custom attributes.
 
     EXCEPTIONS: ELAFailException, ELAProductIdException,
     ELACustomAttributeResourceTypeInvalidException, ELABufferSizeException
@@ -1723,13 +1808,29 @@ function GetCustomAttributes(ResourceType: TLAResourceType): TArray<TLACustomAtt
 (*
     FUNCTION: GetDataStoreInfo()
 
-    PURPOSE: Gets the information about the data store used by the library.
+    PURPOSE: Gets information about the data store used by LexActivator on the
+    current platform, including the location where the data is stored.
 
-    It must be called after SetProductId().
+    The Path member is the fully resolved location of the data and does not
+    include the name of the data file. If a custom directory has been set using
+    the SetDataDirectory() function, that directory is returned.
 
-    RESULT: Storage kind, permission flag and path of the data store
+    On Windows, when the lfUser or lfSystem flag is used, the data is stored in
+    the registry. In that case the Path member is the registry key path and not a
+    filesystem directory.
 
-    EXCEPTIONS: ELAFailException, ELAProductIdException, ELABufferSizeException
+    When the lfInMemory flag is used, nothing is persisted, StorageKind is
+    "in-memory" and Path is empty.
+
+    This function must be called after calling the SetProductId() function.
+
+    RESULT: Information about the data store.
+
+    EXCEPTIONS: ELAProductIdException, ELABufferSizeException
+
+    NOTE: The path is intended for inspection only. Do not delete, move or modify
+    its contents. To release the activation and clear the activation data of your
+    product, use the DeactivateLicense() function.
 *)
 
 function GetDataStoreInfo: TLADataStoreInfo;
@@ -1737,17 +1838,28 @@ function GetDataStoreInfo: TLADataStoreInfo;
 (*
     FUNCTION: LookupLicense()
 
-    PURPOSE: Looks up the license on the server and returns its key and type
-    e.g. node-locked, hosted-floating.
+    PURPOSE: Retrieves the license information from the Cryptlex servers without
+    activating the license.
+
+    This function sends a network request to the Cryptlex servers. It is optional
+    and is not required by the standard activation flow. It is intended for
+    applications that need license information before activation, e.g. the license
+    type.
+
+    This function must be called after SetProductData(). It does not
+    require SetProductId() to be called first.
 
     PARAMETERS:
-    * LicenseKey - license key to look up
+    * LicenseKey - the license key to look up.
 
-    RESULT: Key and type of the license
+    RESULT: License information.
 
-    EXCEPTIONS: ELAFailException, ELAProductDataException,
-    ELALicenseKeyException, ELAInetException, ELAServerException,
-    ELAClientException, ELARateLimitException, ELABufferSizeException
+    EXCEPTIONS: ELAProductDataException, ELALicenseKeyException, ELAInetException,
+    ELAServerException, ELAClientException, ELARateLimitException
+
+    NOTE: This function neither validates the license nor stores anything on the
+    device, and it has no effect on the activation state of the application. Use
+    ActivateLicense() to activate the license.
 *)
 
 function LookupLicense(const LicenseKey: UnicodeString): TLALicenseLookupInfo;
@@ -2643,7 +2755,7 @@ type
     (*
         CODE: LA_E_CUSTOM_ATTRIBUTE_LIMIT
 
-        MESSAGE: The maximum allowed number of custom attributes has already
+        MESSAGE: The maximum allowed number of custom attributes have already
         been set.
     *)
 
@@ -3381,7 +3493,7 @@ const
     (*
         CODE: LA_E_CUSTOM_ATTRIBUTE_LIMIT
 
-        MESSAGE: The maximum allowed number of custom attributes has already
+        MESSAGE: The maximum allowed number of custom attributes have already
         been set.
     *)
 
@@ -6416,7 +6528,7 @@ end;
 
 constructor ELACustomAttributeLimitException.Create;
 begin
-  inherited Create('The maximum allowed number of custom attributes has already been set');
+  inherited Create('The maximum allowed number of custom attributes have already been set');
   FErrorCode := LA_E_CUSTOM_ATTRIBUTE_LIMIT;
 end;
 
